@@ -3,6 +3,7 @@
 #include <bits/stdint-uintn.h>
 #include <cstring>
 #include <emu/cpu/EmotionEngine.h>
+#include <emu/cpu/opcode.h>
 
 EmotionEngine::EmotionEngine(Bus* bus)
 : bus(bus)
@@ -14,10 +15,15 @@ EmotionEngine::EmotionEngine(Bus* bus)
 
 void EmotionEngine::Clock()
 {
-    uint32_t instr = Read32Instr(pc);
+    Opcode instr;
+    instr.full = Read32Instr(pc);
 
-    printf("[emu/CPU]: %s: Unknown instruction 0x%08x\n", __FUNCTION__, instr);
-    Application::Exit(1);
+    switch (instr.r_type.opcode)
+    {
+    default:
+        printf("[emu/CPU]: %s: Unknown instruction 0x%08x (0x%02x)\n", __FUNCTION__, instr.full, instr.r_type.opcode);
+        Application::Exit(1);
+    }
 }
 
 void EmotionEngine::Dump()
