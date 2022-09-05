@@ -46,6 +46,12 @@ void EmotionEngine::Clock()
         case 0x0F:
             printf("sync\n");
             break;
+        case 0x18:
+            mult(instr);
+            break;
+        case 0x25:
+            op_or(instr);
+            break;
         case 0x2d:
             daddu(instr);
             break;
@@ -58,6 +64,9 @@ void EmotionEngine::Clock()
     break;
     case 0x03:
         j(instr);
+        break;
+    case 0x04:
+        beq(instr);
         break;
     case 0x05:
         bne(instr);

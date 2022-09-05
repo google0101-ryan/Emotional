@@ -11,6 +11,18 @@ void EmotionEngine::j(Opcode i)
     printf("j 0x%08x\n", next_pc);
 }
 
+void EmotionEngine::beq(Opcode i)
+{
+    int32_t imm = (int32_t)((uint32_t)i.i_type.imm << 2);
+
+    printf("beq %s, %s, 0x%08x\n", Reg(i.i_type.rs), Reg(i.i_type.rt), next_pc + imm);
+
+    if ((int32_t)regs[i.i_type.rs].u32[0] == (int32_t)regs[i.i_type.rt].u32[0])
+    {
+        next_pc = pc + imm;
+    }   
+}
+
 void EmotionEngine::bne(Opcode i)
 {
     int32_t imm = (int32_t)((uint32_t)i.i_type.imm << 2);
@@ -124,6 +136,33 @@ void EmotionEngine::jalr(Opcode i)
     next_pc = regs[rs].u32[0];
 
     printf("jalr %s, %s\n", Reg(rs), Reg(rd));
+}
+
+void EmotionEngine::mult(Opcode i)
+{
+    int rs = i.r_type.rs;
+    int rt = i.r_type.rt;
+    int rd = i.r_type.rd;
+
+    int64_t reg1 = (int64_t)regs[rs].u32[0];
+    int64_t reg2 = (int64_t)regs[rt].u32[0];
+    int64_t result = reg1 * reg2;
+
+    regs[rd].u32[0] = lo = (int32_t)(result & 0xFFFFFFFF);
+    hi = (int32_t)(result >> 32);
+
+    printf("mult %s, %s, %s\n", Reg(rd), Reg(rs), Reg(rt));
+}
+
+void EmotionEngine::op_or(Opcode i)
+{
+    int rd = i.r_type.rd;
+    int rs = i.r_type.rs;
+    int rt = i.r_type.rt;
+
+    regs[rd].u32[0] = regs[rt].u32[0] | regs[rs].u32[0];
+
+    printf("or %s, %s, %s\n", Reg(rd), Reg(rt), Reg(rs));
 }
 
 void EmotionEngine::daddu(Opcode i)

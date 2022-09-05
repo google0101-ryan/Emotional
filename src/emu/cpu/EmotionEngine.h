@@ -161,6 +161,7 @@ private:
     }
 
     void j(Opcode i); // 0x03
+    void beq(Opcode i); // 0x04
     void bne(Opcode i); // 0x05
     void addiu(Opcode i); // 0x09
     void slti(Opcode i); // 0x0A
@@ -175,6 +176,8 @@ private:
     void sll(Opcode i); // 0x00
     void jr(Opcode i); // 0x08
     void jalr(Opcode i); // 0x09
+    void mult(Opcode i); // 0x18
+    void op_or(Opcode i); // 0x25
     void daddu(Opcode i); // 0x2d
 
     void AdvancePC()

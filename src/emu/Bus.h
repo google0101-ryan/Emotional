@@ -53,6 +53,8 @@ public:
 
         switch (addr)
         {
+        case 0x1000f100:
+        case 0x1000f120:
         case 0x1000f500:
             return;
         }
