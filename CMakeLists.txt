@@ -5,7 +5,8 @@ set(CMAKE_MINIMUM_REQUIRED_VERSION 3.16.3)
 set(SOURCES src/main.cpp
             src/app/Application.cpp
             src/emu/Bus.cpp
-            src/emu/cpu/EmotionEngine.cpp)
+            src/emu/cpu/EmotionEngine.cpp
+            src/emu/cpu/instructions.cpp)
 
 set(CMAKE_BUILD_TYPE DEBUG)
 

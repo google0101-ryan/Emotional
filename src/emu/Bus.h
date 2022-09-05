@@ -8,6 +8,7 @@ class Bus
 private:
     uint8_t ram[0x2000000];
     uint8_t bios[0x400000];
+    uint8_t scratchpad[0x4000];
 
     uint32_t Translate(uint32_t addr)
     {
@@ -40,9 +41,40 @@ public:
     }
 
     template<typename T>
-    void write(uint32_t addr, T)
+    void write(uint32_t addr, T data)
     {
+        addr = Translate(addr);
+
+        if (addr >= 0x70000000 && addr < 0x70004000)
+        {
+            *(T*)&scratchpad[addr - 0x70000000] = data;
+            return;
+        }
+
+        switch (addr)
+        {
+        case 0x1000f500:
+            return;
+        }
+
         printf("[emu/Bus]: %s: Write to unknown addr 0x%08x\n", __FUNCTION__, addr);
         exit(1);
+    }
+
+    // Returns whether a region of memory is cacheable by the bus
+    bool IsCacheable(uint32_t addr)
+    {
+        if (addr <= 0x7FFFFFFF)
+            return true;
+        else if (addr >= 0x80000000 && addr <= 0x9FFFFFFF)
+            return true;
+        else if (addr >= 0xA0000000 && addr <= 0xBFFFFFFF)
+            return false;
+        else if (addr >= 0xC0000000 && addr <= 0xDFFFFFFF)
+            return true;
+        else if (addr >= 0xE0000000 && addr <= 0xFFFFFFF)
+            return true;
+        else
+            return false;
     }
 };
