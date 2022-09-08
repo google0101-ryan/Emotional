@@ -33,6 +33,7 @@ void EmotionEngine::Clock()
     if (instr.full == 0)
     {
         printf("nop\n");
+        HandleLoadDelay();
         return;
     }
 
@@ -54,8 +55,14 @@ void EmotionEngine::Clock()
         case 0x09:
             jalr(instr);
             break;
+        case 0x0B:
+            movn(instr);
+            break;
         case 0x0F:
             printf("sync\n");
+            break;
+        case 0x10:
+            mfhi(instr);
             break;
         case 0x12:
             mflo(instr);
@@ -63,11 +70,23 @@ void EmotionEngine::Clock()
         case 0x18:
             mult(instr);
             break;
+        case 0x1A:
+            div(instr);
+            break;
         case 0x1B:
             divu(instr);
             break;
+        case 0x21:
+            addu(instr);
+            break;
+        case 0x23:
+            subu(instr);
+            break;
         case 0x25:
             op_or(instr);
+            break;
+        case 0x2b:
+            sltu(instr);
             break;
         case 0x2d:
             daddu(instr);
@@ -85,6 +104,9 @@ void EmotionEngine::Clock()
         {
         case 0x00:
             bltz(instr);
+            break;
+        case 0x01:
+            bgez(instr);
             break;
         default:
             printf("[emu/CPU]: %s: Unknown regimm instruction 0x%08x (0x%02x)\n", __FUNCTION__, instr.full, instr.i_type.rt);
@@ -104,6 +126,12 @@ void EmotionEngine::Clock()
         break;
     case 0x05:
         bne(instr);
+        break;
+    case 0x06:
+        blez(instr);
+        break;
+    case 0x07:
+        bgtz(instr);
         break;
     case 0x09:
         addiu(instr);
@@ -178,6 +206,8 @@ void EmotionEngine::Clock()
         Application::Exit(1);
     }
 
+    HandleLoadDelay();
+
     regs[0].u64[0] = regs[0].u64[1] = 0;
 }
 
@@ -186,4 +216,6 @@ void EmotionEngine::Dump()
     for (int i = 0; i < 32; i++)
         printf("[emu/CPU]: %s: %s\t->\t%s\n", __FUNCTION__, Reg(i), print_128(regs[i]));
     printf("[emu/CPU]: %s: pc\t->\t0x%08x\n", __FUNCTION__, pc-4);
+    printf("[emu/CPU]: %s: hi\t->\t0x%08x\n", __FUNCTION__, hi);
+    printf("[emu/CPU]: %s: lo\t->\t0x%08x\n", __FUNCTION__, lo);
 }

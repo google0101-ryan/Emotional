@@ -35,7 +35,7 @@ public:
     T read(uint32_t addr)
     {
         addr = Translate(addr);
-
+        
         if (addr >= 0x1FC00000 && addr < 0x21C00000)
             return *(T*)&bios[addr - 0x1FC00000];
         if (addr >= 0x70000000 && addr < 0x70004000)

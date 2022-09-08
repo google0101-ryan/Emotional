@@ -15,4 +15,5 @@ public:
     static bool Init(int argc, char** argv);
     static int Run();
     static void Exit(int code);
+    static void Exit();
 };

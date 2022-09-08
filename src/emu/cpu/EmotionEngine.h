@@ -24,6 +24,20 @@ private:
         };
     } cop1;
 
+    struct LoadDelaySlot
+    {
+        uint32_t reg;
+        uint128_t value;
+    } cur_delay, next_delay;
+
+    void HandleLoadDelay()
+    {
+        regs[cur_delay.reg] = cur_delay.value;
+        cur_delay = next_delay;
+        next_delay.reg = 0;
+        next_delay.value.u64[0] = next_delay.value.u64[1] = 0;
+    }
+
     struct CacheTag
     {
         bool valid = false;
@@ -41,14 +55,24 @@ private:
 
     ICacheLine icache[128];
 
+    struct DCacheLine
+    {
+        bool lfu[2];
+        bool dirty[2];
+        uint32_t tag[2];
+        uint8_t data[2][64];
+    };
+
+    DCacheLine dcache[64];
+
     bool isCacheEnabled = false;
 
     uint32_t Read32(uint32_t addr, bool isInstr = false)
     {
-        if (!bus->IsCacheable(addr) || !isCacheEnabled || !isInstr)
+        if (!bus->IsCacheable(addr) || !isCacheEnabled)
             return bus->read<uint32_t>(addr);
 
-        int index = (addr >> 6) & 0x7F;
+        int index = (addr >> 6) & 0xFF;
         uint16_t tag = addr >> 13;
         int off = addr & 0x3F;
 
@@ -120,6 +144,8 @@ private:
     void jal(Opcode i); // 0x03
     void beq(Opcode i); // 0x04
     void bne(Opcode i); // 0x05
+    void blez(Opcode i); // 0x06
+    void bgtz(Opcode i); // 0x07
     void addiu(Opcode i); // 0x09
     void slti(Opcode i); // 0x0A
     void sltiu(Opcode i); // 0x0B
@@ -143,13 +169,20 @@ private:
     void sra(Opcode i); // 0x03
     void jr(Opcode i); // 0x08
     void jalr(Opcode i); // 0x09
+    void movn(Opcode i); // 0x0B
+    void mfhi(Opcode i); // 0x10
     void mflo(Opcode i); // 0x12
     void mult(Opcode i); // 0x18
+    void div(Opcode i); // 0x1A
     void divu(Opcode i); // 0x1B
+    void addu(Opcode i); // 0x21
+    void subu(Opcode i); // 0x23
     void op_or(Opcode i); // 0x25
+    void sltu(Opcode i); // 0x2b
     void daddu(Opcode i); // 0x2d
 
     void bltz(Opcode i); // 0x00
+    void bgez(Opcode i); // 0x01
 
     void AdvancePC()
     {

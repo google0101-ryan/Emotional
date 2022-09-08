@@ -29,6 +29,8 @@ bool Application::Init(int argc, char** argv)
 
     ee = new EmotionEngine(bus);
 
+    std::atexit(Application::Exit);
+
     isRunning = true;
 
     return true;
@@ -46,6 +48,17 @@ int Application::Run()
 void Application::Exit(int code)
 {
     exit_code = code;
-    ee->Dump();
     isRunning = false;
+}
+
+void Application::Exit()
+{
+    ee->Dump();
+
+    std::ofstream mem("mem.dump");
+
+    for (int i = 0x70000000; i < 0x70004000; i++)
+        mem << bus->read<uint8_t>(i);
+    mem.flush();
+    mem.close();
 }
