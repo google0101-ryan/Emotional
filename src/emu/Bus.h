@@ -2,6 +2,7 @@
 
 #include <bits/stdint-uintn.h>
 #include <string>
+#include <fstream>
 
 class Bus
 {
@@ -9,6 +10,8 @@ private:
     uint8_t ram[0x2000000];
     uint8_t bios[0x400000];
     uint8_t scratchpad[0x4000];
+
+    std::ofstream console;
 
     uint32_t Translate(uint32_t addr)
     {
@@ -35,6 +38,14 @@ public:
 
         if (addr >= 0x1FC00000 && addr < 0x21C00000)
             return *(T*)&bios[addr - 0x1FC00000];
+        if (addr >= 0x70000000 && addr < 0x70004000)
+            return *(T*)&scratchpad[addr - 0x70000000];
+
+        switch (addr)
+        {
+        case 0x1000f130: // SIO status
+            return 0;
+        }
         
         printf("[emu/Bus]: %s: Failed to read from address 0x%08x\n", __FUNCTION__, addr);
         exit(1);
@@ -53,9 +64,16 @@ public:
 
         switch (addr)
         {
+            // misc SIO settings
         case 0x1000f100:
         case 0x1000f120:
+        case 0x1000f140:
+        case 0x1000f150:
         case 0x1000f500:
+            return;
+        case 0x1000f180:
+            console << (char)data;
+            console.flush();
             return;
         }
 

@@ -13,12 +13,20 @@ EmotionEngine::EmotionEngine(Bus* bus)
     next_pc = pc + 4;
 
     cop0_regs[15] = 0x2E20;
+
+    for (int i = 0; i < 128; i++)
+    {
+        icache[i].tag[0] = 1 << 31;
+        icache[i].tag[1] = 1 << 31;
+        icache[i].lfu[0] = false;
+        icache[i].lfu[1] = false;
+    }
 }
 
 void EmotionEngine::Clock()
 {
     Opcode instr;
-    instr.full = Read32Instr(pc);
+    instr.full = Read32(pc, true);
 
     AdvancePC();
 
@@ -37,6 +45,9 @@ void EmotionEngine::Clock()
         case 0x00:
             sll(instr);
             break;
+        case 0x03:
+            sra(instr);
+            break;
         case 0x08:
             jr(instr);
             break;
@@ -46,8 +57,14 @@ void EmotionEngine::Clock()
         case 0x0F:
             printf("sync\n");
             break;
+        case 0x12:
+            mflo(instr);
+            break;
         case 0x18:
             mult(instr);
+            break;
+        case 0x1B:
+            divu(instr);
             break;
         case 0x25:
             op_or(instr);
@@ -62,8 +79,25 @@ void EmotionEngine::Clock()
         }
     }
     break;
-    case 0x03:
+    case 0x01:
+    {
+        switch (instr.i_type.rt)
+        {
+        case 0x00:
+            bltz(instr);
+            break;
+        default:
+            printf("[emu/CPU]: %s: Unknown regimm instruction 0x%08x (0x%02x)\n", __FUNCTION__, instr.full, instr.i_type.rt);
+            Application::Exit(1);
+            break;
+        }
+    }
+    break;
+    case 0x02:
         j(instr);
+        break;
+    case 0x03:
+        jal(instr);
         break;
     case 0x04:
         beq(instr);
@@ -76,6 +110,9 @@ void EmotionEngine::Clock()
         break;
     case 0x0A:
         slti(instr);
+        break;
+    case 0x0B:
+        sltiu(instr);
         break;
     case 0x0C:
         andi(instr);
@@ -106,8 +143,32 @@ void EmotionEngine::Clock()
         }
     }
     break;
+    case 0x14:
+        beql(instr);
+        break;
+    case 0x15:
+        bnel(instr);
+        break;
+    case 0x20:
+        lb(instr);
+        break;
+    case 0x23:
+        lw(instr);
+        break;
+    case 0x24:
+        lbu(instr);
+        break;
+    case 0x28:
+        sb(instr);
+        break;
     case 0x2B:
         sw(instr);
+        break;
+    case 0x37:
+        ld(instr);
+        break;
+    case 0x39:
+        swc1(instr);
         break;
     case 0x3f:
         sd(instr);
@@ -124,4 +185,5 @@ void EmotionEngine::Dump()
 {
     for (int i = 0; i < 32; i++)
         printf("[emu/CPU]: %s: %s\t->\t%s\n", __FUNCTION__, Reg(i), print_128(regs[i]));
+    printf("[emu/CPU]: %s: pc\t->\t0x%08x\n", __FUNCTION__, pc-4);
 }

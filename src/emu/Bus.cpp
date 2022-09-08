@@ -30,4 +30,6 @@ Bus::Bus(std::string fileName, bool& s)
 
     s = true;
     printf("[emu/Bus]: %s: Bus initialized\n", __FUNCTION__);
+
+    console.open("log.txt");
 }

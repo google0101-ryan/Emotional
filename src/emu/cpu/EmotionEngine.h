@@ -15,6 +15,15 @@ private:
     uint32_t pc, next_pc;
     uint64_t hi, lo;
 
+    struct COP1
+    {
+        union
+        {
+            float f[32] = {0.0f};
+            uint32_t i[32];
+        };
+    } cop1;
+
     struct CacheTag
     {
         bool valid = false;
@@ -23,47 +32,68 @@ private:
         uint32_t page = 0;
     };
 
-    struct Cache
+    struct ICacheLine
     {
-        CacheTag tag[2];
-        uint8_t data[2][64] = {0};
-    } icache[128], dcache[64];
+        bool lfu[2];
+        uint32_t tag[2];
+        uint8_t data[2][64];
+    };
+
+    ICacheLine icache[128];
 
     bool isCacheEnabled = false;
 
-    uint32_t Read32Instr(uint32_t addr)
+    uint32_t Read32(uint32_t addr, bool isInstr = false)
     {
-        if (!bus->IsCacheable(addr) || !isCacheEnabled)
+        if (!bus->IsCacheable(addr) || !isCacheEnabled || !isInstr)
             return bus->read<uint32_t>(addr);
 
-        uint32_t page = (addr >> 14);
-        uint32_t index = (addr >> 5) & 8;
-        uint32_t offset = addr & 0x3F;
+        int index = (addr >> 6) & 0x7F;
+        uint16_t tag = addr >> 13;
+        int off = addr & 0x3F;
 
-        Cache& line = icache[index];
+        ICacheLine& line = icache[index];
 
-        for (int way = 0; way < 2; way++)
+        if (line.tag[0] != tag)
         {
-            if (line.tag[way].page == page && line.tag[way].valid)
+            if (line.tag[1] != tag)
             {
-                return *((uint32_t*)&line.data[way][offset]);
+                printf("Cache miss for addr 0x%08x\n", addr);
+                if (line.tag[0] & (1 << 31))
+                {
+                    line.lfu[0] ^= true;
+                    line.tag[0] = tag;
+                    for (int i = 0; i < 64; i++)
+                        line.data[0][i] = bus->read<uint8_t>((addr & 0xFFFFFFC0) + i);
+                    return *(uint32_t*)&line.data[0][off];
+                }
+                else if (line.tag[1] & (1 << 31))
+                {
+                    line.lfu[1] ^= true;
+                    line.tag[1] = tag;
+                    for (int i = 0; i < 64; i++)
+                        line.data[1][i] = bus->read<uint8_t>((addr & 0xFFFFFFC0) + i);
+                    return *(uint32_t*)&line.data[1][off];
+                }
+                else
+                {
+                    int replace = line.lfu[0] ^ line.lfu[1];
+                    line.lfu[replace] ^= true;
+                    line.lfu[replace] = tag;
+                    for (int i = 0; i < 64; i++)
+                        line.data[replace][i] = bus->read<uint8_t>((addr & 0xFFFFFFC0) + i);
+                    return *(uint32_t*)&line.data[replace][off];
+                }
+            }
+            else
+            {
+                return *(uint32_t*)&line.data[1][off];
             }
         }
-
-        // Welp, cache miss
-        printf("[emu/CPU]: Cache miss for address 0x%08x\n", addr);
-
-        int replace = 0;
-        if (!line.tag[0].valid && line.tag[1].valid)
-            replace = 0;
-        else if (line.tag[0].valid && !line.tag[1].valid)
-            replace = 1;
         else
-            replace = line.tag[0].lrf ^ line.tag[1].lrf;
-        
-        for (int i = 0; i < 64; i++)
-            line.data[replace][i] = bus->read<uint8_t>((page << 14) + i);
-        return *(uint32_t*)&line.data[replace][offset];
+        {
+            return *(uint32_t*)&line.data[0][off];
+        }
     }
 
     void Write32(uint32_t addr, uint32_t data)
@@ -74,43 +104,7 @@ private:
             return;
         }
 
-        uint32_t page = (addr >> 13);
-        uint32_t index = (addr >> 5) & 0b1111111;
-        uint32_t offset = addr & 0x3F;
-
-        Cache& line = dcache[index];
-
-        for (int way = 0; way < 2; way++)
-        {
-            if (line.tag[way].page == page && line.tag[way].valid)
-            {
-                *((uint32_t*)&line.data[way][offset]) = data;
-                line.tag[way].dirty = true; // We mark as dirty to flush back to main memory on eviction
-            }
-        }
-
-        printf("[emu/CPU]: Cache miss for address 0x%08x\n", addr);
-
-        int replace = 0;
-        if (!line.tag[0].valid && line.tag[1].valid)
-            replace = 0;
-        else if (line.tag[0].valid && !line.tag[1].valid)
-            replace = 1;
-        else
-            replace = line.tag[0].lrf ^ line.tag[1].lrf;
-
-        if (line.tag[replace].dirty)
-        {
-            for (int i = 0; i < 64; i++)
-                bus->write((page << 13) + i, line.data[replace][i]);
-        }
         
-        for (int i = 0; i < 64; i++)
-        {
-            line.data[replace][i] = bus->read<uint8_t>((page << 13) + i);
-        }
-        *(uint32_t*)&line.data[replace][offset] = data;
-        line.tag[replace].dirty = true;
     }
 
     void Write64(uint32_t addr, uint64_t data)
@@ -120,65 +114,42 @@ private:
             bus->write(addr, data);
             return;
         }
-
-        uint32_t page = (addr >> 13);
-        uint32_t index = (addr >> 5) & 0b1111111;
-        uint32_t offset = addr & 0x3F;
-
-        Cache& line = dcache[index];
-
-        for (int way = 0; way < 2; way++)
-        {
-            if (line.tag[way].page == page && line.tag[way].valid)
-            {
-                *((uint64_t*)&line.data[way][offset]) = data;
-                line.tag[way].dirty = true; // We mark as dirty to flush back to main memory on eviction
-            }
-        }
-
-        printf("[emu/CPU]: Cache miss for address 0x%08x\n", addr);
-
-        int replace = 0;
-        if (!line.tag[0].valid && line.tag[1].valid)
-            replace = 0;
-        else if (line.tag[0].valid && !line.tag[1].valid)
-            replace = 1;
-        else
-            replace = line.tag[0].lrf ^ line.tag[1].lrf;
-
-        if (line.tag[replace].dirty)
-        {
-            for (int i = 0; i < 64; i++)
-                bus->write((page << 13) + i, line.data[replace][i]);
-        }
-        
-        for (int i = 0; i < 64; i++)
-        {
-            line.data[replace][i] = bus->read<uint8_t>((page << 13) + i);
-        }
-        *(uint64_t*)&line.data[replace][offset] = data;
-        line.tag[replace].dirty = true;
     }
 
-    void j(Opcode i); // 0x03
+    void j(Opcode i); // 0x02
+    void jal(Opcode i); // 0x03
     void beq(Opcode i); // 0x04
     void bne(Opcode i); // 0x05
     void addiu(Opcode i); // 0x09
     void slti(Opcode i); // 0x0A
+    void sltiu(Opcode i); // 0x0B
     void andi(Opcode i); // 0x0C
     void ori(Opcode i); // 0x0D
     void lui(Opcode i); // 0x0F
     void mfc0(Opcode i); // 0x10 0x00
     void mtc0(Opcode i); // 0x10 0x04
+    void beql(Opcode i); // 0x14
+    void bnel(Opcode i); // 0x15
+    void lb(Opcode i); // 0x20
+    void lw(Opcode i); // 0x23
+    void lbu(Opcode i); // 0x24
+    void sb(Opcode i); // 0x28
     void sw(Opcode i); // 0x2B
+    void ld(Opcode i); // 0x37
+    void swc1(Opcode i); // 0x39
     void sd(Opcode i); // 0x3f
     
     void sll(Opcode i); // 0x00
+    void sra(Opcode i); // 0x03
     void jr(Opcode i); // 0x08
     void jalr(Opcode i); // 0x09
+    void mflo(Opcode i); // 0x12
     void mult(Opcode i); // 0x18
+    void divu(Opcode i); // 0x1B
     void op_or(Opcode i); // 0x25
     void daddu(Opcode i); // 0x2d
+
+    void bltz(Opcode i); // 0x00
 
     void AdvancePC()
     {
