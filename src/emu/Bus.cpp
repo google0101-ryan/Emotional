@@ -1,5 +1,3 @@
-#pragma once
-
 #include <cstddef> // size_t
 #include <emu/Bus.h> // class Bus
 #include <fstream> // ifstrem
@@ -32,4 +30,21 @@ Bus::Bus(std::string fileName, bool& s)
     printf("[emu/Bus]: %s: Bus initialized\n", __FUNCTION__);
 
     console.open("log.txt");
+
+    gif = new GIF();
+    gs = new GraphicsSynthesizer();
+    ee_timers = new EmotionTimers();
+    ee_dmac = new EmotionDma();
+    vu0 = new VectorUnit(0);
+    vu1 = new VectorUnit(1);
+
+    vif0 = new VectorInterface(vu0, 0);
+    vif1 = new VectorInterface(vu1, 1);
+
+    sif = new SubsystemInterface();
+}
+
+void Bus::Clock()
+{
+    gif->tick(16);
 }

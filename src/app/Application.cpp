@@ -1,11 +1,18 @@
 #include "Application.h"
 #include "emu/cpu/EmotionEngine.h"
+#include <signal.h>
 
 bool Application::isRunning = false;
 int Application::exit_code = 0;
 
 Bus* Application::bus = nullptr;
 EmotionEngine* Application::ee = nullptr;
+
+void Sig(int)
+{
+    printf("Segfault\n");
+    Application::Exit();
+}
 
 bool Application::Init(int argc, char** argv)
 {
@@ -27,10 +34,11 @@ bool Application::Init(int argc, char** argv)
         return false;
     }
 
-    ee = new EmotionEngine(bus);
+    ee = new EmotionEngine(bus, bus->GetVU0());
 
     std::atexit(Application::Exit);
-
+    signal(SIGSEGV, Sig);
+    
     isRunning = true;
 
     return true;
@@ -40,7 +48,8 @@ int Application::Run()
 {
     while (isRunning)
     {
-        ee->Clock();
+        ee->Clock(32);
+        bus->Clock();
     }
     return exit_code;
 }
@@ -49,15 +58,24 @@ void Application::Exit(int code)
 {
     exit_code = code;
     isRunning = false;
+    exit(1);
 }
 
 void Application::Exit()
 {
     ee->Dump();
+    bus->GetVU0()->Dump();
 
     std::ofstream mem("mem.dump");
 
     for (int i = 0x70000000; i < 0x70004000; i++)
+        mem << bus->read<uint8_t>(i);
+    mem.flush();
+    mem.close();
+
+    mem.open("ram.dump");
+
+    for (int i = 0; i < 0x2000000; i++)
         mem << bus->read<uint8_t>(i);
     mem.flush();
     mem.close();

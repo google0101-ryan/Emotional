@@ -9,6 +9,7 @@
 
 typedef union
 {
+    __extension__ unsigned __int128 u128;
     uint64_t u64[2];
     uint32_t u32[4];
     uint16_t u16[8];
@@ -17,9 +18,9 @@ typedef union
 
 inline char* print_128(uint128_t s)
 {
-    static char ret[33];
+    static char ret[512];
 
-    memset(ret, 0, 33);
+    memset(ret, 0, 512);
 
     sprintf(ret, "%lx%016lx", s.u64[1], s.u64[0]);
 

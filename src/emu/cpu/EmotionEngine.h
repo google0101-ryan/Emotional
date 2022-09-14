@@ -4,16 +4,19 @@
 #include "emu/cpu/opcode.h"
 #include "util/uint128.h"
 #include <bits/stdint-uintn.h>
-
+#include <emu/cpu/ee/vu.h>
 
 class EmotionEngine
 {
 private:
     Bus* bus;
+    VectorUnit* vu0;
+
     uint128_t regs[32];
     uint32_t cop0_regs[32];
     uint32_t pc, next_pc;
     uint64_t hi, lo;
+    uint64_t hi1, lo1;
 
     struct COP1
     {
@@ -21,7 +24,14 @@ private:
         {
             float f[32] = {0.0f};
             uint32_t i[32];
-        };
+        } regs;
+
+        union
+        {
+            float f;
+            uint32_t u;
+            int32_t i;
+        } accumulator;
     } cop1;
 
     struct LoadDelaySlot
@@ -69,7 +79,7 @@ private:
 
     uint32_t Read32(uint32_t addr, bool isInstr = false)
     {
-        if (!bus->IsCacheable(addr) || !isCacheEnabled)
+        if (!bus->IsCacheable(addr) || !isCacheEnabled || !isInstr)
             return bus->read<uint32_t>(addr);
 
         int index = (addr >> 6) & 0xFF;
@@ -140,6 +150,8 @@ private:
         }
     }
 
+    bool singleStep = false;
+
     void j(Opcode i); // 0x02
     void jal(Opcode i); // 0x03
     void beq(Opcode i); // 0x04
@@ -151,38 +163,85 @@ private:
     void sltiu(Opcode i); // 0x0B
     void andi(Opcode i); // 0x0C
     void ori(Opcode i); // 0x0D
+    void xori(Opcode i); // 0x0E
     void lui(Opcode i); // 0x0F
     void mfc0(Opcode i); // 0x10 0x00
     void mtc0(Opcode i); // 0x10 0x04
     void beql(Opcode i); // 0x14
     void bnel(Opcode i); // 0x15
+    void daddiu(Opcode i); // 0x19
+    void ldl(Opcode i); // 0x1A
+    void ldr(Opcode i); // 0x1B
+    void lq(Opcode i); // 0x1E
+    void sq(Opcode i); // 0x1F
     void lb(Opcode i); // 0x20
+    void lh(Opcode i); // 0x21
     void lw(Opcode i); // 0x23
     void lbu(Opcode i); // 0x24
+    void lhu(Opcode i); // 0x25
+    void lwu(Opcode i); // 0x27
     void sb(Opcode i); // 0x28
+    void sh(Opcode i); // 0x29
     void sw(Opcode i); // 0x2B
+    void sdl(Opcode i); // 0x2C
+    void sdr(Opcode i); // 0x2D
     void ld(Opcode i); // 0x37
     void swc1(Opcode i); // 0x39
     void sd(Opcode i); // 0x3f
     
     void sll(Opcode i); // 0x00
+    void srl(Opcode i); // 0x02
     void sra(Opcode i); // 0x03
+    void sllv(Opcode i); // 0x04
+    void srlv(Opcode i); // 0x06
+    void srav(Opcode i); // 0x07
     void jr(Opcode i); // 0x08
     void jalr(Opcode i); // 0x09
+    void movz(Opcode i); // 0x0a
     void movn(Opcode i); // 0x0B
     void mfhi(Opcode i); // 0x10
     void mflo(Opcode i); // 0x12
+    void dsllv(Opcode i); // 0x14
+    void dsrav(Opcode i); // 0x17
     void mult(Opcode i); // 0x18
     void div(Opcode i); // 0x1A
     void divu(Opcode i); // 0x1B
     void addu(Opcode i); // 0x21
     void subu(Opcode i); // 0x23
+    void op_and(Opcode i); // 0x24
     void op_or(Opcode i); // 0x25
+    void op_nor(Opcode i); // 0x27
+    void slt(Opcode i); // 0x2a
     void sltu(Opcode i); // 0x2b
     void daddu(Opcode i); // 0x2d
+    void dsll(Opcode i); // 0x38
+    void dsrl(Opcode i); // 0x3a
+    void dsll32(Opcode i); // 0x3c
+    void dsrl32(Opcode i); // 0x3e
+    void dsra32(Opcode i); // 0x3f
+
+    // RegImm
 
     void bltz(Opcode i); // 0x00
     void bgez(Opcode i); // 0x01
+
+    // mmi
+
+    void mflo1(Opcode i); // 0x12
+    void mult1(Opcode i); // 0x18
+    void divu1(Opcode i); // 0x1b
+
+    // mmi3
+
+    void por(Opcode i); // 0x12
+
+    // cop1
+
+    void mfc1(Opcode i);
+    void mtc1(Opcode i);
+
+    // cop1.w
+    void adda(Opcode i);
 
     void AdvancePC()
     {
@@ -263,8 +322,8 @@ private:
         }
     }
 public:
-    EmotionEngine(Bus* bus);
+    EmotionEngine(Bus* bus, VectorUnit* vu0);
 
-    void Clock();
+    void Clock(int cycles);
     void Dump();
 };

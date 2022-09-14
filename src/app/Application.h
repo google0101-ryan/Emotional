@@ -16,4 +16,8 @@ public:
     static int Run();
     static void Exit(int code);
     static void Exit();
+    static void Dump()
+    {
+        ee->Dump();
+    }
 };
