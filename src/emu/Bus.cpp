@@ -34,7 +34,7 @@ Bus::Bus(std::string fileName, bool& s)
     gif = new GIF();
     gs = new GraphicsSynthesizer();
     ee_timers = new EmotionTimers();
-    ee_dmac = new EmotionDma();
+    ee_dmac = new EmotionDma(this);
     vu0 = new VectorUnit(0);
     vu1 = new VectorUnit(1);
 
@@ -42,9 +42,42 @@ Bus::Bus(std::string fileName, bool& s)
     vif1 = new VectorInterface(vu1, 1);
 
     sif = new SubsystemInterface();
+
+    iop_bus = new IopBus(bios, iop_ram, sif);
+    iop = new IoProcessor(this);
 }
 
 void Bus::Clock()
 {
+    ee_dmac->tick(16);
     gif->tick(16);
+
+    iop->Clock(4);
+    iop_bus->GetIopTimers()->tick(4);
+    iop_bus->GetIopDma()->tick(4);
+}
+
+void Bus::Dump()
+{
+    std::ofstream file("iop_mem.dump");
+    
+    for (int i = 0; i < 0x200000; i++)
+        file << iop_ram[i];
+    
+    file.flush();
+    file.close();
+
+    file.open("ee_mem.dump");
+
+    for (int i = 0; i < 0x2000000; i++)
+        file << ram[i];
+    file.flush();
+    file.close();
+
+    file.open("spr_mem.dump");
+
+    for (int i = 0; i < 0x4000; i++)
+        file << scratchpad[i];
+    file.flush();
+    file.close();
 }

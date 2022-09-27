@@ -1,5 +1,6 @@
 #pragma once
 
+#include <emu/iopbus.h>
 #include <bits/stdint-uintn.h>
 #include <string>
 #include <fstream>
@@ -9,6 +10,7 @@
 #include <emu/cpu/ee/dmac.h>
 #include <emu/cpu/ee/vu.h>
 #include <emu/cpu/ee/vif.h>
+#include <emu/cpu/iop/iop.h>
 #include <emu/sif.h>
 
 class Bus
@@ -31,6 +33,8 @@ private:
     VectorUnit* vu0, *vu1;
     VectorInterface* vif0, *vif1;
     SubsystemInterface* sif;
+    IopBus* iop_bus;
+    IoProcessor* iop;
 
     uint32_t Translate(uint32_t addr)
     {
@@ -42,7 +46,7 @@ private:
             return addr - 0xA0000000;
         else if (addr >= 0xC0000000 && addr <= 0xDFFFFFFF)
             return addr - 0xC0000000;
-        else if (addr >= 0xE0000000 && addr <= 0xFFFFFFF)
+        else if (addr >= 0xE0000000 && addr <= 0xFFFFFFFF)
             return addr - 0xE0000000;
         else
             return 0xFFFFFFFF;
@@ -51,6 +55,29 @@ public:
     Bus(std::string biosName, bool& success);
 
     void Clock();
+
+    void IopPrint(uint32_t pointer, uint32_t text_size)
+    {
+        while (text_size)
+        {
+            auto c = (char)iop_ram[pointer & 0x1FFFFF];
+            iop_bus->OutputToLog(c);
+            pointer++;
+            text_size--;
+        }
+    }
+
+    template<typename T>
+    T read_iop(uint32_t addr)
+    {
+        return iop_bus->read<T>(addr);
+    }
+
+    template<typename T>
+    void write_iop(uint32_t addr, T data)
+    {
+        return iop_bus->write(addr, data);
+    }
 
     template<typename T>
     T read(uint32_t addr)
@@ -74,7 +101,7 @@ public:
         else if (addr >= 0x10008000 && addr <= 0x1000D480)
             return (T)ee_dmac->read(addr);
         else if (addr >= 0x1000F200 && addr <= 0x1000F260)
-            return (T)sif->read_ee(addr);
+            return (T)sif->read(addr);
 
         switch (addr)
         {
@@ -207,7 +234,7 @@ public:
             return;
         else if (addr >= 0x1000F200 && addr <= 0x1000F260)
         {
-            sif->write_ee(addr, data);
+            sif->write(addr, data);
             return;
         }
         else if (addr >= 0x1C000000 && addr <= 0x1C200000)
@@ -266,7 +293,7 @@ public:
             return;
         }
 
-        printf("[emu/Bus]: %s: Write to unknown addr 0x%08x\n", __FUNCTION__, addr);
+        printf("[emu/Bus]: %s: Write %ld to unknown addr 0x%08x\n", __FUNCTION__, sizeof(T), addr);
         exit(1);
     }
 
@@ -288,4 +315,9 @@ public:
     }
 
     VectorUnit* GetVU0() {return vu0;}
+    SubsystemInterface* GetSif() {return sif;}
+    IoProcessor* GetIop() {return iop;}
+    IopBus* GetBus() {return iop_bus;}
+
+    void Dump();
 };

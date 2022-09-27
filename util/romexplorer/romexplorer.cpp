@@ -67,4 +67,6 @@ int main(int argc, char** argv)
 
         printf("Found romdir entry %s (from 0x%08x to 0x%08x)\n", i->name, 0xbfc00000 + entry.pos, 0xbfc00000 + entry.end);
     }
+
+    printf("0x%08x\n", 0xbfc00000 + start_pos);
 }

@@ -12,7 +12,10 @@ vu0(vu0)
 {
     memset(regs, 0, sizeof(regs));
     pc = 0xBFC00000;
-    next_pc = pc + 4;
+    
+    next_instr = {};
+    next_instr.full = bus->read<uint32_t>(pc);
+    next_instr.pc = pc;
 
     cop0_regs[15] = 0x2E20;
 
@@ -30,13 +33,9 @@ void EmotionEngine::Clock(int cycles)
     int cycles_to_execute = cycles;
     for (int cycle = 0; cycle < cycles; cycle++)
     {
+        instr = next_instr;
 
-        Opcode instr;
-        instr.full = Read32(pc, true);
-
-        //printf("0x%08x: ", pc);
-
-        AdvancePC();
+        fetch_next();
 
         switch (instr.r_type.opcode)
         {

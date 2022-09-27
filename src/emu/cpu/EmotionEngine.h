@@ -14,9 +14,19 @@ private:
 
     uint128_t regs[32];
     uint32_t cop0_regs[32];
-    uint32_t pc, next_pc;
+    uint32_t pc;
     uint64_t hi, lo;
     uint64_t hi1, lo1;
+
+    Opcode next_instr, instr;
+
+    void fetch_next()
+    {
+        next_instr = {};
+        next_instr.full = bus->read<uint32_t>(pc);
+        next_instr.pc = pc;
+        pc += 4;
+    }
 
     struct COP1
     {
@@ -242,12 +252,6 @@ private:
 
     // cop1.w
     void adda(Opcode i);
-
-    void AdvancePC()
-    {
-        pc = next_pc;
-        next_pc += 4;
-    }
 
     const char* Reg(int index)
     {

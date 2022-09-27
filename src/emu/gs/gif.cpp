@@ -9,10 +9,10 @@ void GIF::process_packed(uint128_t qword)
     switch (desc)
     {
     case 0:
-        printf("PRIM: Write 0x%08lx\n", qword.u128 & 0x7ff);
+        printf("PRIM: Write 0x%08lx\n", (uint64_t)(qword.u128 & 0x7ff));
         break;
     case 1:
-        printf("rgba: %d, %d, %d, %d\n", qword.u128 & 0xFF, (qword.u128 >> 32) & 0xFF, (qword.u128 >> 64) & 0xFF, (qword.u128 >> 96) & 0xFF);
+        printf("rgba: %d, %d, %d, %d\n", (uint8_t)qword.u128 & 0xFF, (uint8_t)(qword.u128 >> 32) & 0xFF, (uint8_t)(qword.u128 >> 64) & 0xFF, (uint8_t)(qword.u128 >> 96) & 0xFF);
         break;
     case 2:
         printf("stq\n");

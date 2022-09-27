@@ -12,9 +12,13 @@ set(SOURCES src/main.cpp
             src/emu/cpu/ee/dmac.cpp
             src/emu/cpu/ee/vu.cpp
             src/emu/cpu/ee/vif.cpp
-            src/emu/sif.cpp)
+            src/emu/sif.cpp
+            src/emu/cpu/iop/iop.cpp
+            src/emu/cpu/iop/opcodes.cpp
+            src/emu/cpu/iop/dma.cpp
+            src/emu/cpu/iop/timers.cpp)
 
-set(CMAKE_BUILD_TYPE DEBUG)
+set(CMAKE_BUILD_TYPE Debug)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 

@@ -1,15 +1,31 @@
 #pragma once
 
 #include <util/uint128.h>
+#include <queue>
+
+struct SIFRegs
+{
+    uint32_t mscom;
+    uint32_t smcom;
+    uint32_t msflag;
+    uint32_t ctrl;
+    uint32_t padding;
+    uint32_t bd6;
+};
 
 class SubsystemInterface
 {
 private:
-    uint32_t sif_ctrl;
-    uint32_t sif_bd6;
-    uint32_t mscom, smcom; // Master-to-slave communication (EE -> IOP)
-    uint32_t msflg, smflg; // Master-to-slave semaphore, and vice versa
+    SIFRegs regs = {};
 public:
-    void write_ee(uint32_t addr, uint32_t data);
-    uint32_t read_ee(uint32_t addr);
+    std::queue<uint32_t> fifo0, fifo1;
+
+    void write(uint32_t addr, uint32_t data);
+    uint32_t read(uint32_t addr);
+
+    size_t fifo_size() {return fifo0.size();}
+
+    uint32_t pop_fifo();
+    uint64_t pop_fifo64(); // Used exclusively for EE DMA
+    void push_fifo(uint32_t value);
 };

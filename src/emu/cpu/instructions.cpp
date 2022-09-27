@@ -9,16 +9,16 @@
 void EmotionEngine::j(Opcode i)
 {
     uint32_t target = i.j_type.target;
-    next_pc = (pc & 0xF0000000) | (target << 2);
-    //printf("j 0x%08x\n", next_pc);
+    pc = ((instr.pc + 4) & 0xF0000000) | (target << 2);
+    //printf("j 0x%08x\n", pc);
 }
 
 void EmotionEngine::jal(Opcode i)
 {
     uint32_t target = i.j_type.target;
-    regs[31].u64[0] = pc + 4;
-    next_pc = (pc & 0xF0000000) | (target << 2);
-    //printf("jal 0x%08x\n", next_pc);
+    regs[31].u64[0] = instr.pc + 8;
+    pc = ((instr.pc + 4) & 0xF0000000) | (target << 2);
+    //printf("jal 0x%08x\n", pc);
 }
 
 void EmotionEngine::beq(Opcode i)
@@ -30,14 +30,14 @@ void EmotionEngine::beq(Opcode i)
     int32_t offset = imm << 2;
     if (regs[rs].u64[0] == regs[rt].u64[0])
     {
-        next_pc = pc + offset;
+        pc = instr.pc + offset + 4;
     }
 
-    //printf("beq %s, %s, 0x%08x\n", Reg(rs), Reg(rt), pc + offset);
+    //printf("beq %s, %s, 0x%08x\n", Reg(rs), Reg(rt), instr.pc + offset);
 
-    if (next_pc == 0xbfc00c00)
+    if (pc == 0xbfc00c00)
     {
-        printf("Infinite loop\n");
+        //printf("Infinite loop\n");
         Application::Exit(1);
     }
 }
@@ -51,10 +51,10 @@ void EmotionEngine::bne(Opcode i)
     int32_t offset = imm << 2;
     if (regs[rs].u64[0] != regs[rt].u64[0])
     {
-        next_pc = pc + offset;
+        pc = instr.pc + offset + 4;
     }
 
-    //printf("beq %s, %s, 0x%08x\n", Reg(rs), Reg(rt), pc + offset);
+    //printf("beq %s, %s, 0x%08x\n", Reg(rs), Reg(rt), instr.pc + offset);
 }
 
 void EmotionEngine::blez(Opcode i)
@@ -66,10 +66,10 @@ void EmotionEngine::blez(Opcode i)
     int64_t reg = regs[rs].u64[0];
     if (reg <= 0)
     {
-        next_pc = pc + offset;
+        pc = instr.pc + offset + 4;
     }
 
-    //printf("blez %s, 0x%08x\n", Reg(rs), pc + offset);
+    //printf("blez %s, 0x%08x\n", Reg(rs), instr.pc + offset);
 }
 
 void EmotionEngine::bgtz(Opcode i)
@@ -79,11 +79,13 @@ void EmotionEngine::bgtz(Opcode i)
 
     int rs = i.r_type.rs;
 
-    //printf("bgtz %s, 0x%08x\n", Reg(rs), pc + imm);
+    //printf("bgtz %s, 0x%08x\n", Reg(rs), instr.pc + 4 + imm);
 
-    if ((int32_t)regs[rs].u32[0] > 0)
+    int64_t reg = regs[rs].u64[0];
+
+    if (reg > 0)
     {
-        next_pc = pc + imm;
+        pc = instr.pc + 4 + imm;
     }
 }
 
@@ -101,31 +103,42 @@ void EmotionEngine::addiu(Opcode i)
 
 void EmotionEngine::slti(Opcode i)
 {
-    regs[i.i_type.rt].u64[0] = (int32_t)regs[i.i_type.rs].u32[0] < (int32_t)(uint32_t)i.i_type.imm;
+    int rs = i.i_type.rs;
+    int rt = i.i_type.rt;
+    int64_t imm = (int16_t)i.i_type.imm;
+
+    int64_t reg = regs[rs].u64[0];
+    regs[rt].u64[0] = reg < imm;
+
     //printf("slti %s, %s, 0x%04x\n", Reg(i.i_type.rt), Reg(i.i_type.rs), i.i_type.imm);
 }
 
 void EmotionEngine::sltiu(Opcode i)
 {
-    regs[i.i_type.rt].u64[0] = regs[i.i_type.rs].u32[0] < (uint32_t)i.i_type.imm;
+    int rt = i.i_type.rt;
+    int rs = i.i_type.rs;
+    uint64_t imm = (int16_t)i.i_type.imm;
+
+    regs[rt].u64[0] = regs[rs].u64[0] < imm;
+
     //printf("sltiu %s, %s, 0x%04x\n", Reg(i.i_type.rt), Reg(i.i_type.rs), i.i_type.imm);
 }
 
 void EmotionEngine::andi(Opcode i)
 {
-    regs[i.i_type.rt].u64[0] = regs[i.i_type.rs].u32[0] & (uint32_t)(int32_t)i.i_type.imm;
+    regs[i.i_type.rt].u64[0] = regs[i.i_type.rs].u64[0] & (uint64_t)i.i_type.imm;
     //printf("andi %s, %s, 0x%08x\n", Reg(i.i_type.rt), Reg(i.i_type.rs), i.i_type.imm);
 }
 
 void EmotionEngine::ori(Opcode i)
 {
-    regs[i.i_type.rt].u64[0] = regs[i.i_type.rs].u32[0] | (uint32_t)(int32_t)i.i_type.imm;
+    regs[i.i_type.rt].u64[0] = regs[i.i_type.rs].u64[0] | (uint64_t)i.i_type.imm;
     //printf("ori %s, %s, 0x%08x\n", Reg(i.i_type.rt), Reg(i.i_type.rs), i.i_type.imm);
 }
 
 void EmotionEngine::xori(Opcode i)
 {
-    regs[i.i_type.rt].u64[0] = regs[i.i_type.rs].u32[0] ^ (uint32_t)(int32_t)i.i_type.imm;
+    regs[i.i_type.rt].u64[0] = regs[i.i_type.rs].u64[0] ^ (uint64_t)i.i_type.imm;
     //printf("xori %s, %s, 0x%08x\n", Reg(i.i_type.rt), Reg(i.i_type.rs), i.i_type.imm);
 }
 
@@ -150,35 +163,35 @@ void EmotionEngine::mtc0(Opcode i)
 
 void EmotionEngine::beql(Opcode i)
 {
-    int32_t off = (int32_t)((int16_t)(i.i_type.imm));
+    int32_t off = (int16_t)i.i_type.imm;
     int32_t imm = off << 2;
 
-    //printf("beql %s, %s, 0x%08x\n", Reg(i.i_type.rs), Reg(i.i_type.rt), next_pc + imm);
+    //printf("beql %s, %s, 0x%08x\n", Reg(i.i_type.rs), Reg(i.i_type.rt), pc + imm);
 
-    if ((int32_t)regs[i.i_type.rs].u32[0] == (int32_t)regs[i.i_type.rt].u32[0])
+    if (regs[i.i_type.rs].u64[0] == regs[i.i_type.rt].u64[0])
     {
-        next_pc = pc + imm;
+        pc = instr.pc + 4 + imm;
     }
     else
-        AdvancePC(); // Skip delay slot
+        fetch_next(); // Skip delay slot
 }
 
 void EmotionEngine::bnel(Opcode i)
 {
-    int32_t off = (int32_t)((int16_t)(i.i_type.imm));
+    int32_t off = (int16_t)i.i_type.imm;
     int32_t imm = off << 2;
 
     bool taken = false;
 
-    if ((int32_t)regs[i.i_type.rs].u32[0] != (int32_t)regs[i.i_type.rt].u32[0])
+    if (regs[i.i_type.rs].u64[0] != regs[i.i_type.rt].u64[0])
     {
-        next_pc = pc + imm;
+        pc = instr.pc + 4 + imm;
         taken = true;
     }
     else
-        AdvancePC(); // Skip delay slot
+        fetch_next(); // Skip delay slot
     
-    //printf("bnel %s, %s, 0x%08x (%s)\n", Reg(i.i_type.rs), Reg(i.i_type.rt), pc + imm, taken ? "taken" : "");
+    //printf("bnel %s, %s, 0x%08x (%s)\n", Reg(i.i_type.rs), Reg(i.i_type.rt), instr.pc + 4 + imm, taken ? "taken" : "");
 }
 
 void EmotionEngine::ldl(Opcode i)
@@ -252,7 +265,7 @@ void EmotionEngine::lq(Opcode i)
     int rt = i.i_type.rt;
     int16_t off = (int16_t)i.i_type.imm;
 
-    uint32_t addr = (int32_t)regs[base].u32[0] + off;
+    uint32_t addr = regs[base].u32[0] + off;
 
     regs[rt].u128 = bus->read<__uint128_t>(addr);
 
@@ -265,7 +278,7 @@ void EmotionEngine::sq(Opcode i)
     int rt = i.i_type.rt;
     int16_t off = (int16_t)i.i_type.imm;
 
-    uint32_t addr = (int32_t)regs[base].u32[0] + off;
+    uint32_t addr = regs[base].u32[0] + off;
 
     bus->write(addr, regs[rt].u128);
 
@@ -280,7 +293,7 @@ void EmotionEngine::lb(Opcode i)
     int rt = i.i_type.rt;
     int16_t off = (int16_t)i.i_type.imm;
 
-    uint32_t addr = (int32_t)regs[base].u32[0] + off;
+    uint32_t addr = regs[base].u32[0] + off;
 
     regs[rt].u64[0] = (int64_t)((uint8_t)(Read32(addr) & 0xFF));
 
@@ -293,9 +306,9 @@ void EmotionEngine::lh(Opcode i)
     int rt = i.i_type.rt;
     int16_t off = (int16_t)i.i_type.imm;
 
-    uint32_t addr = (int32_t)regs[base].u32[0] + off;
+    uint32_t addr = regs[base].u32[0] + off;
 
-    regs[rt].u64[0] = (int64_t)((int16_t)bus->read<uint16_t>(addr));
+    regs[rt].u64[0] = (int16_t)bus->read<uint16_t>(addr);
 
     //printf("lh %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
@@ -306,11 +319,17 @@ void EmotionEngine::lw(Opcode i)
     int rt = i.i_type.rt;
     int16_t off = (int16_t)i.i_type.imm;
 
-    uint32_t addr = (int32_t)regs[base].u32[0] + off;
+    uint32_t addr = off + regs[base].u32[0];
 
-    regs[rt].u64[0] = (int64_t)bus->read<uint32_t>(addr);
+    if (addr & 0x3)
+    {
+        //printf("lw: Unaligned address\n");
+        exit(1);
+    }
 
-    //printf("lw %s, %d(%s(0x%x))\n", Reg(rt), off, Reg(base), regs[base].u32[0]);
+    regs[rt].u64[0] = (int32_t)bus->read<uint32_t>(addr);
+
+    //printf("lw %s, %d(%s(0x%x))\n", Reg(rt), off, Reg(base), addr);
 }
 
 void EmotionEngine::lbu(Opcode i)
@@ -319,7 +338,7 @@ void EmotionEngine::lbu(Opcode i)
     int rt = i.i_type.rt;
     int16_t off = (int16_t)i.i_type.imm;
 
-    uint32_t addr = (int32_t)regs[base].u32[0] + off;
+    uint32_t addr = regs[base].u32[0] + off;
 
     regs[rt].u64[0] = (Read32(addr) & 0xFF);
 
@@ -332,7 +351,7 @@ void EmotionEngine::lhu(Opcode i)
     int rt = i.i_type.rt;
     int16_t off = (int16_t)i.i_type.imm;
 
-    uint32_t addr = (int32_t)regs[base].u32[0] + off;
+    uint32_t addr = regs[base].u32[0] + off;
 
     regs[rt].u64[0] = (Read32(addr) & 0xFFFF);
 
@@ -345,7 +364,7 @@ void EmotionEngine::lwu(Opcode i)
     int rt = i.i_type.rt;
     int16_t off = (int16_t)i.i_type.imm;
 
-    uint32_t addr = (int32_t)regs[base].u32[0] + off;
+    uint32_t addr = regs[base].u32[0] + off;
 
     regs[rt].u64[0] = Read32(addr);
 
@@ -358,7 +377,7 @@ void EmotionEngine::sb(Opcode i)
     int rt = i.i_type.rt;
     int16_t off = (int16_t)i.i_type.imm;
 
-    uint32_t addr = (int32_t)regs[base].u32[0] + off;
+    uint32_t addr = regs[base].u32[0] + off;
 
     bus->write<uint8_t>(addr, regs[rt].u32[0] & 0xFF);
 
@@ -371,7 +390,7 @@ void EmotionEngine::sh(Opcode i)
     int rt = i.i_type.rt;
     int16_t off = (int16_t)i.i_type.imm;
 
-    uint32_t addr = (int32_t)regs[base].u32[0] + off;
+    uint32_t addr = regs[base].u32[0] + off;
 
     bus->write<uint16_t>(addr, regs[rt].u32[0]);
 
@@ -384,7 +403,7 @@ void EmotionEngine::sw(Opcode i)
     int rt = i.i_type.rt;
     int16_t off = (int16_t)i.i_type.imm;
 
-    uint32_t addr = (int32_t)regs[base].u32[0] + off;
+    uint32_t addr = regs[base].u32[0] + off;
 
     //printf("sw %s, %d(%s) -> (0x%08x)\n", Reg(rt), off, Reg(base), addr);
 
@@ -450,7 +469,7 @@ void EmotionEngine::ld(Opcode i)
     int rt = i.i_type.rt;
     int16_t off = (int16_t)i.i_type.imm;
 
-    uint32_t addr = (int32_t)regs[base].u32[0] + off;
+    uint32_t addr = regs[base].u32[0] + off;
 
     regs[rt].u64[0] = bus->read<uint64_t>(addr);
 
@@ -478,7 +497,7 @@ void EmotionEngine::sd(Opcode i)
 
     uint32_t addr = regs[base].u32[0] + off;
 
-    Write64(addr, regs[rt].u32[0]);
+    bus->write<uint64_t>(addr, regs[rt].u64[0]);
 
     //printf("sd %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
@@ -486,8 +505,8 @@ void EmotionEngine::sd(Opcode i)
 
 void EmotionEngine::jr(Opcode i)
 {
-    next_pc = regs[i.r_type.rs].u32[0];
-    //printf("jr %s\n", Reg(i.r_type.rs));
+    pc = regs[i.r_type.rs].u32[0];
+    //printf("jr %s (0x%08x)\n", Reg(i.r_type.rs), pc);
 }
 
 
@@ -497,7 +516,7 @@ void EmotionEngine::sll(Opcode i)
     int rt = i.r_type.rt;
     int sa = i.r_type.sa;
 
-    regs[rd].u64[0] = (uint64_t)(regs[rt].u32[0] << sa);
+    regs[rd].u64[0] = (uint64_t)(int32_t)(regs[rt].u32[0] << sa);
 
     //if (i.full != 0)
         //printf("sll %s, %s, %d\n", Reg(rd), Reg(rt), sa);
@@ -511,7 +530,7 @@ void EmotionEngine::srl(Opcode i)
     int rt = i.r_type.rt;
     int sa = i.r_type.sa;
 
-    regs[rd].u64[0] = (uint64_t)(regs[rt].u32[0] >> sa);
+    regs[rd].u64[0] = (int32_t)(regs[rt].u32[0] >> sa);
 
     //printf("srl %s, %s, %d\n", Reg(rd), Reg(rt), sa);
 }
@@ -572,8 +591,8 @@ void EmotionEngine::jalr(Opcode i)
     int rs = i.r_type.rs;
     int rd = i.r_type.rd;
     
-    regs[rd].u64[0] = next_pc;
-    next_pc = regs[rs].u32[0];
+    regs[rd].u64[0] = instr.pc + 8;
+    pc = regs[rs].u32[0];
 
     //printf("jalr %s, %s\n", Reg(rs), Reg(rd));
 }
@@ -650,8 +669,8 @@ void EmotionEngine::mult(Opcode i)
     int rt = i.r_type.rt;
     int rd = i.r_type.rd;
 
-    int64_t reg1 = (int64_t)regs[rs].u32[0];
-    int64_t reg2 = (int64_t)regs[rt].u32[0];
+    int64_t reg1 = (int64_t)regs[rs].u64[0];
+    int64_t reg2 = (int64_t)regs[rt].u64[0];
     int64_t result = reg1 * reg2;
 
     regs[rd].u64[0] = lo = (int32_t)(result & 0xFFFFFFFF);
@@ -737,7 +756,7 @@ void EmotionEngine::op_and(Opcode i)
     int rs = i.r_type.rs;
     int rt = i.r_type.rt;
 
-    regs[rd].u64[0] = regs[rt].u32[0] & regs[rs].u32[0];
+    regs[rd].u64[0] = regs[rt].u64[0] & regs[rs].u64[0];
 
     //printf("and %s, %s, %s\n", Reg(rd), Reg(rt), Reg(rs));
 }
@@ -748,7 +767,7 @@ void EmotionEngine::op_or(Opcode i)
     int rs = i.r_type.rs;
     int rt = i.r_type.rt;
 
-    regs[rd].u64[0] = regs[rt].u32[0] | regs[rs].u32[0];
+    regs[rd].u64[0] = regs[rt].u64[0] | regs[rs].u64[0];
 
     //printf("or %s, %s, %s\n", Reg(rd), Reg(rt), Reg(rs));
 }
@@ -759,7 +778,7 @@ void EmotionEngine::op_nor(Opcode i)
     int rs = i.r_type.rs;
     int rt = i.r_type.rt;
 
-    regs[rd].u64[0] = ~(regs[rt].u32[0] | regs[rs].u32[0]);
+    regs[rd].u64[0] = ~(regs[rt].u64[0] | regs[rs].u64[0]);
 
     //printf("nor %s, %s, %s\n", Reg(rd), Reg(rt), Reg(rs));
 }
@@ -770,9 +789,11 @@ void EmotionEngine::slt(Opcode i)
     int rs = i.r_type.rs;
     int rt = i.r_type.rt;
 
-    regs[rd].u64[0] = (int32_t)regs[rs].u64[0] < (int32_t)regs[rt].u64[0];
-
-    //printf("slt %s, %s, %s\n", Reg(rd), Reg(rs), Reg(rt));
+    int64_t reg1 = regs[rs].u64[0];
+    int64_t reg2 = regs[rt].u64[0];
+    regs[rd].u64[0] = reg1 < reg2;
+    
+    //printf("slt %s, %s (0x%08x), %s (0x%08x)\n", Reg(rd), Reg(rs), reg1, Reg(rt), reg2);
 }
 
 void EmotionEngine::sltu(Opcode i)
@@ -863,11 +884,11 @@ void EmotionEngine::bltz(Opcode i)
     int32_t off = (int32_t)((int16_t)(i.i_type.imm));
     int32_t imm = off << 2;
 
-    //printf("bltz %s, 0x%08x\n", Reg(rs), pc + off);
+    //printf("bltz %s, 0x%08x\n", Reg(rs), instr.pc + off);
 
     if (val < 0)
     {
-        next_pc = pc + imm;
+        pc = instr.pc + 4 + imm;
     }
 }
 
@@ -879,11 +900,11 @@ void EmotionEngine::bgez(Opcode i)
     int32_t off = (int32_t)((int16_t)(i.i_type.imm));
     int32_t imm = off << 2;
 
-    //printf("bgez %s, 0x%08x\n", Reg(rs), pc + off);
+    //printf("bgez %s, 0x%08x\n", Reg(rs), instr.pc + off);
 
     if (val >= 0)
     {
-        next_pc = pc + imm;
+        pc = instr.pc + 4 + imm;
     }
 }
 
@@ -926,7 +947,7 @@ void EmotionEngine::divu1(Opcode i)
     }
     else
     {
-        printf("DIVU1: Division by zero!\n");
+        //printf("DIVU1: Division by zero!\n");
         Application::Exit(1);
     }
 }

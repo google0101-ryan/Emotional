@@ -2,36 +2,53 @@
 
 #include <util/uint128.h>
 
+class Bus;
+
 class EmotionDma
 {
 private:
-    struct CHCR
+    union CHCR
     {
         struct
         {
-            uint32_t dir : 1;
-            uint32_t unused0: 1;
-            uint32_t mode : 2;
-            uint32_t asp : 2;
-            uint32_t transfer_dmatag : 1;
-            uint32_t irq_en : 1;
-            uint32_t start : 1;
-            uint32_t unused1 : 7;
-            uint32_t tag : 16;
+            uint32_t direction : 1; /* 0 = to memory, 1 = from memory */
+			uint32_t : 1;
+			uint32_t mode : 2; /* 0 = normal, 1 = chain, 2 = interleave */
+			uint32_t stack_ptr : 2;
+			uint32_t transfer_tag : 1;
+			uint32_t enable_irq_bit : 1;
+			uint32_t running : 1;
+			uint32_t : 7;
+			uint32_t tag : 16;
         };
         uint32_t value;
+    };
+
+    union DMATag
+    {
+        uint64_t value;
+        struct
+        {
+            uint64_t qword_count : 16,
+            unused0 : 10,
+            prio_control : 2,
+            tag_id : 3,
+            irq : 1,
+            addr : 31,
+            mem_select : 63;
+        };
     };
 
     struct Channel
     {
         CHCR chcr;
-        uint32_t madr;
-        uint32_t tadr;
+        uint32_t addr;
         uint32_t qwords;
         uint32_t save_tag_addr;
         uint32_t scratchpad_addr;
         uint32_t asr0;
         uint32_t asr1;
+        bool should_finish = false;
     } channels[10];
     
     union
@@ -82,7 +99,11 @@ private:
         SPR_FROM,
         SPR_TO
     };
+
+    Bus* bus;
 public:
+    EmotionDma(Bus* bus);
+
     void tick(int cycles);
 
     void write(uint32_t addr, uint32_t data);

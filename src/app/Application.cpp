@@ -38,6 +38,7 @@ bool Application::Init(int argc, char** argv)
 
     std::atexit(Application::Exit);
     signal(SIGSEGV, Sig);
+    signal(SIGINT, Application::Exit);
     
     isRunning = true;
 
@@ -64,7 +65,9 @@ void Application::Exit(int code)
 void Application::Exit()
 {
     ee->Dump();
-    bus->GetVU0()->Dump();
+    // bus->GetVU0()->Dump();
+    bus->GetIop()->Dump();
+    bus->Dump();
 
     std::ofstream mem("mem.dump");
 
