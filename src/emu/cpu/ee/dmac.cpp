@@ -37,6 +37,8 @@ void EmotionDma::write(uint32_t addr, uint32_t data)
     case 0x0:
         channels[chan].chcr.value = data;
         printf("Setting channel %d chcr to 0x%x (%d)\n", chan, data, channels[chan].chcr.running);
+        if (channels[chan].chcr.running)
+            printf("Starting transfer on channel %d\n", chan);
         break;
     case 0x01:
         printf("Setting channel %d maddr -> 0x%08x\n", chan, data);
@@ -152,6 +154,9 @@ void EmotionDma::tick(int cycles)
                             chan->qwords = tag.qword_count;
                             chan->chcr.tag = (tag.value >> 16) & 0xffff;
                             chan->save_tag_addr += 16;
+
+                            if (tag.tag_id == 0 || tag.tag_id == 7)
+                                chan->should_finish = true;
 
                             if (chan->chcr.enable_irq_bit && tag.irq)
                                 chan->should_finish = true;

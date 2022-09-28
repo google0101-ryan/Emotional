@@ -1,0 +1,239 @@
+[app/App]: Init: Initializing Bus
+[emu/Bus]: Bus: Bus initialized
+0x45534552
+[emu/IOP]: RegisterLibraryEntries: excepman version 1.01
+[emu/IOP]: RegisterLibraryEntries: intrman version 1.02
+[emu/IOP]: RegisterLibraryEntries: ssbusc version 1.01
+[emu/IOP]: RegisterLibraryEntries: dmacman version 1.02
+[emu/IoDma]: Writing 0x00000000 to Dn_MADR on channel 0
+[emu/IoDma]: Writing 0x00000000 to Dn_BCR on channel 0
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 0
+[emu/IoDma]: Writing 0x00000000 to Dn_MADR on channel 1
+[emu/IoDma]: Writing 0x00000000 to Dn_BCR on channel 1
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 1
+[emu/IoDma]: Writing 0x00000000 to Dn_MADR on channel 2
+[emu/IoDma]: Writing 0x00000000 to Dn_BCR on channel 2
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 2
+[emu/IoDma]: Writing 0x00000000 to Dn_MADR on channel 3
+[emu/IoDma]: Writing 0x00000000 to Dn_BCR on channel 3
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 3
+[emu/IoDma]: Writing 0x00000000 to Dn_MADR on channel 4
+[emu/IoDma]: Writing 0x00000000 to Dn_BCR on channel 4
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 4
+[emu/IoDma]: Writing 0x00000000 to Dn_MADR on channel 5
+[emu/IoDma]: Writing 0x00000000 to Dn_BCR on channel 5
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 5
+[emu/IoDma]: Writing 0x00000000 to Dn_MADR on channel 6
+[emu/IoDma]: Writing 0x00000000 to Dn_BCR on channel 6
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 6
+[emu/IoDma]: Writing 0x00000000 to Dn_MADR on channel 7
+[emu/IoDma]: Writing 0x00000000 to Dn_BCR on channel 7
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 7
+[emu/IoDma]: Writing 0x00000000 to Dn_MADR on channel 8
+[emu/IoDma]: Writing 0x00000000 to Dn_BCR on channel 8
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 8
+[emu/IoDma]: Writing 0x00000000 to Dn_MADR on channel 9
+[emu/IoDma]: Writing 0x00000000 to Dn_BCR on channel 9
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 9
+[emu/IoDma]: Writing 0x00000000 to Dn_MADR on channel 10
+[emu/IoDma]: Writing 0x00000000 to Dn_BCR on channel 10
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 10
+[emu/IoDma]: Writing 0x00000000 to Dn_MADR on channel 11
+[emu/IoDma]: Writing 0x00000000 to Dn_BCR on channel 11
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 11
+[emu/IoDma]: Writing 0x00000000 to Dn_MADR on channel 12
+[emu/IoDma]: Writing 0x00000000 to Dn_BCR on channel 12
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 12
+[emu/IoDma]: Writing 0x00000000 to Dn_TADR on channel 4
+[emu/IoDma]: Writing 0x00000000 to Dn_TADR on channel 9
+[emu/IOP]: RegisterLibraryEntries: timrman version 1.01
+[emu/IOP]: RegisterLibraryEntries: sysclib version 1.01
+[emu/IOP]: RegisterLibraryEntries: stdio version 1.01
+[emu/IOP]: RegisterLibraryEntries: heaplib version 1.01
+[emu/IOP]: RegisterLibraryEntries: thbase version 1.01
+[emu/IOP]: RegisterLibraryEntries: thevent version 1.01
+[emu/IOP]: RegisterLibraryEntries: thsemap version 1.01
+[emu/IOP]: RegisterLibraryEntries: thmsgbx version 1.01
+[emu/IOP]: RegisterLibraryEntries: thfpool version 1.01
+[emu/IOP]: RegisterLibraryEntries: thvpool version 1.01
+[emu/IOP]: RegisterLibraryEntries: vblank version 1.01
+[emu/IOP]: RegisterLibraryEntries: ioman version 1.02
+[emu/IOP]: RegisterLibraryEntries: modload version 1.01
+stq
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+stq
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+stq
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+stq
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+PRIM: Write 0x00000000
+Setting channel 0 spr -> 0x00000000
+Setting channel 0 chcr to 0x0 (0)
+Setting channel 0 tadr -> 0x00000000
+Setting channel 0 maddr -> 0x00000000
+Setting channel 0 asr1 -> 0x00000000
+Setting channel 0 asr0 -> 0x00000000
+Setting channel 1 spr -> 0x00000000
+Setting channel 1 chcr to 0x0 (0)
+Setting channel 1 tadr -> 0x00000000
+Setting channel 1 maddr -> 0x00000000
+Setting channel 1 asr1 -> 0x00000000
+Setting channel 1 asr0 -> 0x00000000
+Setting channel 2 spr -> 0x00000000
+Setting channel 2 chcr to 0x0 (0)
+Setting channel 2 tadr -> 0x00000000
+Setting channel 2 maddr -> 0x00000000
+Setting channel 2 asr1 -> 0x00000000
+Setting channel 2 asr0 -> 0x00000000
+Setting channel 3 spr -> 0x00000000
+Setting channel 3 chcr to 0x0 (0)
+Setting channel 3 tadr -> 0x00000000
+Setting channel 3 maddr -> 0x00000000
+Setting channel 3 asr1 -> 0x00000000
+Setting channel 3 asr0 -> 0x00000000
+Setting channel 4 spr -> 0x00000000
+Setting channel 4 chcr to 0x0 (0)
+Setting channel 4 tadr -> 0x00000000
+Setting channel 4 maddr -> 0x00000000
+Setting channel 4 asr1 -> 0x00000000
+Setting channel 4 asr0 -> 0x00000000
+Setting channel 8 spr -> 0x00000000
+Setting channel 8 chcr to 0x0 (0)
+Setting channel 8 tadr -> 0x00000000
+Setting channel 8 maddr -> 0x00000000
+Setting channel 8 asr1 -> 0x00000000
+Setting channel 8 asr0 -> 0x00000000
+Setting channel 9 spr -> 0x00000000
+Setting channel 9 chcr to 0x0 (0)
+Setting channel 9 tadr -> 0x00000000
+Setting channel 9 maddr -> 0x00000000
+Setting channel 9 asr1 -> 0x00000000
+Setting channel 9 asr0 -> 0x00000000
+[emu/IOP]: RegisterLibraryEntries: stdio version 1.02
+Adding 0x01000404 to VIF1 fifo
+Adding 0x03000000 to VIF1 fifo
+Adding 0x20000000 to VIF1 fifo
+Adding 0x00000000 to VIF1 fifo
+Adding 0x00000000 to VIF1 fifo
+PRIM: Write 0x00000000
+Adding 0x01000404 to VIF0 fifo
+Adding 0x04000000 to VIF0 fifo
+Setting channel 4 chcr to 0x1 (0)
+[emu/SifIop]: Reading 0x516942d0 from 0x1d000060
+[emu/SifIop]: Reading 0x516942d0 from 0x1d000060
+[emu/IOP]: RegisterLibraryEntries: cdvdman version 1.01
+[emu/IoDma]: Writing 0x00000000 to Dn_CHCR on channel 3
+[emu/IOP]: RegisterLibraryEntries: secrman version 1.03
+[emu/SifEE]: Writing 0x00000100 to 0x1000f240
+[emu/SifEE]: Writing 0x000000ff to 0x1000f260
+Setting channel 7 chcr to 0x0 (0)
+[emu/SifEE]: Writing 0x000000ff to 0x1000f260
+Setting channel 5 chcr to 0x0 (0)
+Setting channel 6 chcr to 0x0 (0)
+Setting channel 5 chcr to 0x0 (0)
+Setting channel 5 qwc -> 0x00000000
+Setting channel 5 chcr to 0x184 (1)
+Starting transfer on channel 5
+[emu/SifEE]: Writing 0x8001e000 to 0x1000f200
+[emu/SifEE]: Writing 0x00010000 to 0x1000f220
+Setting channel 6 qwc -> 0x00000000
+Setting channel 6 tadr -> 0x0001e140
+[emu/SifEE]: Writing 0x00000000 to 0x1000f200
+[emu/CPU]: Dump: $zero	->	00000000000000000
+[emu/CPU]: Dump: $at	->	0ffffffff80020000
+[emu/CPU]: Dump: $v0	->	0ffffffffb000f230
+[emu/CPU]: Dump: $v1	->	1010101010101010ffffffffb000f200
+[emu/CPU]: Dump: $a0	->	00000000000000100
+[emu/CPU]: Dump: $a1	->	500000000000000000000000001e140
+[emu/CPU]: Dump: $a2	->	0ffffffffa0000000
+[emu/CPU]: Dump: $a3	->	00000000000000100
+[emu/CPU]: Dump: $t0	->	000000000000000ff
+[emu/CPU]: Dump: $t1	->	0000000000000021f
+[emu/CPU]: Dump: $t2	->	00000000000000230
+[emu/CPU]: Dump: $t3	->	00000000000000000
+[emu/CPU]: Dump: $t4	->	00000000030000000
+[emu/CPU]: Dump: $t5	->	00000000000000000
+[emu/CPU]: Dump: $t6	->	00000000000000007
+[emu/CPU]: Dump: $t7	->	00000000000000003
+[emu/CPU]: Dump: $s0	->	00000000000010000
+[emu/CPU]: Dump: $s1	->	0ffffffff8001e000
+[emu/CPU]: Dump: $s2	->	00000000000000000
+[emu/CPU]: Dump: $s3	->	00000000000000000
+[emu/CPU]: Dump: $s4	->	00000000000000000
+[emu/CPU]: Dump: $s5	->	00000000000000000
+[emu/CPU]: Dump: $s6	->	00000000000000000
+[emu/CPU]: Dump: $s7	->	00000000000000000
+[emu/CPU]: Dump: $t8	->	0ffffffff80015a50
+[emu/CPU]: Dump: $t9	->	00000000000000027
+[emu/CPU]: Dump: $k0	->	00000000000001000
+[emu/CPU]: Dump: $k1	->	00000000000000000
+[emu/CPU]: Dump: $gp	->	00000000000000000
+[emu/CPU]: Dump: $sp	->	0ffffffff80015c00
+[emu/CPU]: Dump: $fp	->	00000000000000000
+[emu/CPU]: Dump: $ra	->	00000000080006270
+[emu/CPU]: Dump: pc	->	0x80005e94
+[emu/CPU]: Dump: hi	->	0x00000000
+[emu/CPU]: Dump: lo	->	0x00000000
+[emu/CPU]: Dump: hi1	->	0x00000000
+[emu/CPU]: Dump: lo1	->	0x00000240
+[emu/IOP]: Dump: $zero	->	0x00000000
+[emu/IOP]: Dump: $at	->	0x00010000
+[emu/IOP]: Dump: $v0	->	0x000f4240
+[emu/IOP]: Dump: $v1	->	0x00005b30
+[emu/IOP]: Dump: $a0	->	0x001ffd78
+[emu/IOP]: Dump: $a1	->	0x001ffd78
+[emu/IOP]: Dump: $a2	->	0x00001200
+[emu/IOP]: Dump: $a3	->	0x000f4240
+[emu/IOP]: Dump: $t0	->	0x00000004
+[emu/IOP]: Dump: $t1	->	0x00000000
+[emu/IOP]: Dump: $t2	->	0x00000000
+[emu/IOP]: Dump: $t3	->	0x00011e28
+[emu/IOP]: Dump: $t4	->	0xfffee000
+[emu/IOP]: Dump: $t5	->	0x00000000
+[emu/IOP]: Dump: $t6	->	0x0001165c
+[emu/IOP]: Dump: $t7	->	0x000116b8
+[emu/IOP]: Dump: $s0	->	0x001ffd78
+[emu/IOP]: Dump: $s1	->	0x000116bc
+[emu/IOP]: Dump: $s2	->	0x00000000
+[emu/IOP]: Dump: $s3	->	0x00000001
+[emu/IOP]: Dump: $s4	->	0xfffffffc
+[emu/IOP]: Dump: $s5	->	0x00200000
+[emu/IOP]: Dump: $s6	->	0x00000000
+[emu/IOP]: Dump: $s7	->	0x00000000
+[emu/IOP]: Dump: $t8	->	0x00003270
+[emu/IOP]: Dump: $t9	->	0x00000009
+[emu/IOP]: Dump: $k0	->	0x00000000
+[emu/IOP]: Dump: $k1	->	0x00000000
+[emu/IOP]: Dump: $gp	->	0x000191f0
+[emu/IOP]: Dump: $sp	->	0x001ffd40
+[emu/IOP]: Dump: $fp	->	0x001fff40
+[emu/IOP]: Dump: $ra	->	0x0001000c
+[emu/IOP]: Dump: pc	->	0x000106dc

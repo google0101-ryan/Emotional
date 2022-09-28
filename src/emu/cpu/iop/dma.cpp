@@ -121,5 +121,7 @@ uint32_t IoDma::read(uint32_t addr)
 void IoDma::tick(int cycles)
 {
     for (int cycle = cycles; cycle > 0; cycle--)
-    {}
+    {
+        
+    }
 }

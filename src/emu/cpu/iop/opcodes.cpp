@@ -20,6 +20,19 @@ void IoProcessor::bcond(Opcode i)
 void IoProcessor::j(Opcode i)
 {
     next_pc = (next_pc & 0xF0000000) | (i.j_type.target << 2);
+    
+    if (next_pc == 0x1EC8 || next_pc == 0x1F64)
+    {
+        uint32_t struct_ptr = regs[4];
+        uint16_t version = bus->read_iop<uint16_t>(struct_ptr + 8);
+        char name[9];
+        name[8] = 0;
+        for (int i = 0; i < 8; i++)
+            name[i] = bus->read_iop<uint8_t>(struct_ptr + 12 + i);
+        printf("[emu/IOP]: RegisterLibraryEntries: %s version %d.0%d\n", name, version >> 8, version & 0xff);
+    }
+
+
     //printf("j 0x%08x\n", next_pc);
 }
 
@@ -383,19 +396,20 @@ void IoProcessor::jalr(Opcode i)
     //printf("jalr %s, %s\n", Reg(i.r_type.rs), Reg(i.r_type.rd));
 }
 
-void IoProcessor::syscall(Opcode)
+uint32_t exception_addr[2] = { 0x80000080, 0xBFC00180 };
+
+void IoProcessor::syscall(Opcode i)
 {
-    uint32_t mode = Cop0.regs[12] & 0x3F;
-    Cop0.regs[12] &= ~(uint32_t)0x3F;
-    Cop0.regs[12] |= (mode << 2) & 0x3F;
+    uint32_t mode = Cop0.status.value;
+    Cop0.status.value &= ~(uint32_t)0x3F;
+    Cop0.status.value |= (mode << 2) & 0x3F;
 
-    Cop0.regs[13] |= (uint32_t)(0x8 << 2);
-    Cop0.regs[13] &= (0 << 28);
+    Cop0.cause.excode = (uint32_t)8;
+    Cop0.cause.CE = 0;
 
-    Cop0.regs[14] = next_pc;
+    Cop0.epc = i.pc;
 
-    bool bev = Cop0.regs[12] & (1 << 22);
-    pc = bev ? 0x80000080 : 0xBFC00180;
+    pc = exception_addr[Cop0.status.BEV];
 
     //printf("syscall\n");
 }

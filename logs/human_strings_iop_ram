@@ -1,0 +1,595 @@
+sysmem
+4$ E
+B0B$
+4$ f
+B0B$
+'System_Memory_Manager
+2c$X
+$#(P
+'!  
+$$ "
+3B$+
+1&! @
+B0C	
+$+(C
+loadcore0
+sysmem
+Module_Manager
+<4;c$! 
+<t;B$
+<4;c$!
+<0;B$
+<0;B$D
+<x;c$
+<x;"
+excepman04
+sysmem
+loadcore
+Exception_Manager
+<$Sc$
+< SB$
+c4$ C
+c4$ C
+<,S$
+<,SB
+c4! @
+<,SB
+<$SB$<
+<0[c$+
+<0[c$+
+<4KZ
+<0PZ
+RZ'!
+	$$@	
+intrman
+loadcore
+excepmanP
+Interrupt_Manager
+ssbusc
+loadcore
+intrman
+ssbus_service
+<$|B
+<0|B
+<$|B
+<0|B
+<(|B
+<4|B
+<(|B
+<4|B
+< |B
+<,|B
+<8|B
+< |B
+<,|B
+<8|B
+<D|B
+<<|B
+<@|B
+<D|B
+<<|B
+<@|B
+<H|B
+<H|B
+<L|B
+<L|B
+<P|B
+<P|B
+<T|B
+<T|B
+<X|B
+<X|B
+<\|B
+<\|B
+<`|B
+<`|B
+%2! 
+<% D
+dmacman
+sysmem
+loadcore
+intrman
+dmacman
+WARNING:DMA %dch has been continued until shutdown
+timrman
+loadcore
+intrman
+Timer_Manager
+B$q'
+sysclib
+stdio
+$!0`
+s6!0
+loadcore
+System_C_lib
+0123456789abcdef
+(null)
+0123456789ABCDEF
+         
+                  
+AAAAAA
+BBBBBB
+heaplib
+D$!0
+$!( 
+0!( 
+%&! 
+&!  
+sysmem
+loadcore
+Heap_lib
+s&HB
+B$! 
+'!  
+B$! 
+$&>B
+B$WC
+$! `
+B$0B
+B$0B
+B$>B
+B$0B
+$&+C
+&!  
+B$.A
+&!  
+B$.A
+B$WC
+1&!  
+thbase
+thevent
+thsemap
+thmsgbx
+thfpool
+thvpool
+thrdman
+sysmem
+loadcore
+intrman
+stdio
+sysclib
+timrman
+heaplib
+Multi_Thread_Manager
+IOP Realtime Kernel Ver.0.9.1
+    Copyright 1999 (C) Sony Computer Entertainment Inc. 
+    not THS_RUN 
+ readyq = %x, newrun = %x:%d, prio = %d
+Panic: not found executable Thread
+    THS_RUN cp=%d : hp=%d 
+  readyq = %x, newrun = %x:%d, prio = %d
+Panic: not found ready Thread
+Thread (thid=%x, #%d) stack overflow
+ Stack = %x, Stack size = %x, SP=%x
+ Module Name = %s
+[%3d->
+switch_context(%x:%x,pc=%x,ei=%x =>%x:%d)
+%3d]
+   switch_context --> %x:%x,pc=%x,ei=%x =>%x:%d
+panic ! Thread DORMANT !
+CheckThreadStack()
+WARNING: SleepTread KE_CAN_NOT_WAIT
+WARNING: DelayTread KE_CAN_NOT_WAIT
+WARNING: WaitEventFlag KE_CAN_NOT_WAIT
+WARNING: WaitSema KE_CAN_NOT_WAIT
+WARNING: ReceiveMbx:KE_CAN_NOT_WAIT
+WARNING: AllocateVpl KE_CAN_NOT_WAIT
+WARNING: AllocateFpl KE_CAN_NOT_WAIT
+&!  
+0&!8
+< 'B$
+<0'c$
+D&fI
+D&fI
+vblank
+loadcore
+intrman
+sysclib
+thbase
+thevent
+Vblank_service
+'!(@
+=B$#
+'!(@
+=B$#
+'!(@
+'!(@
+'!(@
+'!(@
+'!(@
+<D<B
+<D<B
+<D<B
+<H<2
+<D<B
+<D<B
+<D<B
+<H<B
+<D<B
+<D<B
+<H< 
+ioman
+sysmem
+loadcore
+intrman
+sysclib
+IO/File_Manager
+tty00:
+ioabort exit:%s %s
+out of file descriptors
+Unknown device '%s'
+Known devices are 
+ %s:(%s) 
+CONSOLE
+invalid lseek arg
+io request for unsupported operation
+$!(@
+R&uU
+$!( 
+Q$\U
+$!(@
+modload
+sysmem
+loadcore
+sysclib
+stdio
+ioman
+intrman
+thbase
+thevent
+thsemap
+Moldule_File_loader
+Reboot fail! need file name argument
+updater '%s' can't load
+return from updater '%s' return value = %d
+ ReBootStart: Terminate resident Libraries
+  %.8s %x 
+IOPBOOT
+<O?c4
+<O-B4
+`B$! 
+SE	<RE)5T
+B$! 
+intrman
+sysclib
+ioman
+ROM_file_driver
+ROM/Flash
+stdio
+loadcore
+sysclib
+ioman
+Stdio
+        
+<NULL>
+ 16@
+'!(@
+ 16qm
+%!(h
+B,nf
+ c4@
+ c4! @
+ff	<gf)5
+B$! 
+s&! 
+$!( 
+b0J^
+B$! 
+B$! 
+'! @
+$!( 
+cdvdman
+ B4@
+<a%c$
+ c4@
+<d%c$
+ c4!
+ B4@
+$!0 
+2!( 
+2!( 
+<d%B$
+ B4(
+<a%B$
+<`%B$
+$!( 
+$!8 
+<	 B40
+ k5@
+ J5@
+'!0@
+'!0@
+$! @
+$! @
+$!(@
+$!8`
+$!(@
+$!(@
+$!0@
+<  B4@
+<9 c4
+<( B4@
+<9 c4
+<0 B4@
+<9 c4
+<: B4
+$!8`
+'!0@
+loadcore
+intrman
+stdio
+thbase
+thsemap
+sysclib
+ioman
+cdvd_driver
+CD-ROM 
+cdrom
+fileIO OPEN name= %s mode= %d
+open fail name %s
+fileIO CLOSE
+cdvd fileIO read start
+read file_lbn= %d offset= %d
+sceRead LBN= %d sectors= %d
+fileIO read end
+Read Error= 0x%02x
+sce_Read LBN= %d sectors= %d
+fileIO read ended
+fileIO SEEK
+nulldev call
+DISK READY call from iop
+Wait Drive Ready
+Drive Not Ready
+DISK Pause wait call from iop
+Wait Drive Pause
+Drive Not Pause
+sceCdStInit call
+sceCdStStart call
+sceCdStSeek call
+sceCdStStop call
+sceCdStRead call read size= %d mode= %d
+sceCdStRead BLK Read cur_size= %d req_size= %d err 0x%x
+sceCdStPause call
+sceCdStResume call
+sceCdStStat call
+CD Stream Call mode= %d
+Stream Buffer 1Bank %dbyte %dbanks %dbyte used
+CD read buffer over run %d %d %d %d %d gp %d pp %d
+Intr Read call
+read Full %d %d %d %d %d gp %d pp %d spn %d
+CdSearchFile: cache dir data used
+%s: path level (%d) error
+%s: dir was not found
+CdSearchFile: disc error
+CdSearchFile: searching %s...
+%d %s %s
+%s:  found
+%s: not found
+CD_newmedia: Illegal disc media type =%d
+CD_newmedia: Read error in disc_read(PVD)
+CD001
+CD_newmedia: Disc format error in cd_read(PVD)
+CD_newmedia: DVD Read mode
+CD_newmedia: CD Read mode
+CD_newmedia: Read error (PT:%08x)
+CD_newmedia: sarching dir..
+	%08x,%04x,%04x,%s
+CD_newmedia: %d dir entries found
+CD_cachefile: dir not found
+CD_cachefile: searching...
+	 lsn %d size %d %s %d/%d/%d %d:%d:%d
+CD_cachefile: %d files found
+loc= %d size= %d
+read error: Search File
+exit code %d error %x
+Intr func0 no seting
+Intr func1 no seting
+sceCdInit called mode= %d
+Cdvdman Exit
+in:%d out_size:%d 
+set_prev_command:cmd 0x%x err result cnt %d:%d 
+Break call
+cdvd: Abort command On
+Apply NCmd call cmd= 0x%02x
+sceCdGetReadPos: No Reading
+Read Command call
+DVD read pram set
+DVD read command call
+DVD read command called 
+Audio Digital Out: Set param %d
+Auto Adjust Ctrl: Set param %d
+ReadNVM call addr= 0x%04x data= 0x%04x stat= 0x%02x
+WriteNVM call addr= 0x%04x data= 0x%04x stat= 0x%02x
+Tray Req test = %d
+ReadConfig fail Command busy
+ReadConfig fail status: 0x%02x
+WriteConfig fail Command busy
+WriteConfig fail status: 0x%02x
+Set HD mode= %d
+Set HD mode OK
+'!0@
+'!0@
+'!0@
+'!0@
+$2!(
+'! `
+'! `
+$!(@
+d2!(@
+< YB
+c$&0
+< YB$
+$!  
+< Y$
+< YB
+<$Y$
+<$YB
+<$YB
+$!0@
+$!(C
+$!(C
+$!(C
+$!(C
+$!(C
+$! `
+<<YR&
+$! `
+<@YB
+$! @
+<4Y1&
+Qc$ 
+<hQB$
+<0Yc$
+<,QB$
+secrman
+loadcore
+stdio
+cdvdman
+ioman
+modload
+secrman_for_cex
+mcCommand isn't assigned
+SecrAuthCard start
+card auth 0x60
+mechacon auth 0x80
+card auth key change
+card auth 0x00
+mechacon auth 0x81
+card auth 0x01
+card auth 0x02
+mechacon auth 0x82
+card auth 0x03
+card auth 0x04
+mechacon auth 0x83
+card auth 0x05
+mechacon auth 0x8f
+mechacon auth 0x84
+mechacon auth 0x85
+card auth 0x06
+card auth 0x07
+card auth 0x08
+card auth 0x09
+card auth 0x0a
+card auth 0x0b
+card auth 0x0c
+card auth 0x0d
+card auth 0x0e
+card auth 0x0f
+card auth 0x10
+card auth 0x11
+mechacon auth 0x86
+card auth 0x12
+card auth 0x13
+mechacon auth 0x87
+card auth 0x14
+mechacon auth 0x88
+card decrypt start
+card decrypt 0x40
+card decrypt 0x41
+card decrypt 0x42
+card decrypt 0x43
+header length %d
+secr_set_header: fail write_HD_start
+secr_set_header: fail write_data
+secr_set_header: fail pol_cal_cmplt
+Set Header failed
+Cannot read BIT
+SecrCardBootFile: Cannot decrypt header
+SecrCardBootFile: failed
+SecrDiskBootFile: Cannot decrypt header
+SecrDiskBootFile: failed
+mecha command:%02x param:
+ %02x
+card_command error 0
+sio2 error 0
+ID error 0
+result failed 0
+card_command error %d
+sio2 error %d
+ID error %d
+result failed %d
+check sum error %d
+kbit_offset %d
+kc_offset %d
+don't get elf header
+don't get program header
+load elf error
+eesync
+sifman
+loadcore
+SyncEE
+&!(@
+&!(@
+&!(@
+cdvdfsv
+sysmem
+loadcore
+intrman
+stdio
+thbase
+sifcmd
+sifman
+cdvdman
+cdvd_ee_driver
+ No cdvd driver 
+cdvd driver module version 0.1.1 (C)SCEI
+Dummy Entry Called
+sceCdInit call
+sceCdInit end
+sceCdAbort call
+sceCdABort end
+search file name %s
+CdRead call from EE data load IOP Memory
+Read IOP Memory addr= 0x%08x sector= %d
+Read error return code %d error code %x cmd error %d
+0 CD_READ LBN= %d sectors= %d all= %d
+1 CD_READ LBN= %d sectors= %d data_shift=%d read_data_size= %d speed= %d, time= %d(msec)
+2 CD_READ LBN= %d sectors= %d
+read end
+Stream Buffer 1Bank %dbyte %dbanks %dbyte used
+CD read buffer over run %d %d %d %d %d gp %d pp %d
+Intr Read call
+read Full %d %d %d %d %d gp %d pp %d spn %d
+CD read buffer over run %d %d %d %d %d gp %d pp %d ecode= %d
+CD read buffer over run %d %d %d %d %d gp %d pp %d ecode= %x
+stream return %d
+Intr DA lbn=%d Read call err= %02x count= %d
+**********DA Ended *************
+DA read Full %d %d %d %d %d gp %d pp %d spn %d ADDR %08x ADDR %08x
+DISK READY call 0x%02x
+Wait Drive Ready %x
+Drive Not Ready
+GET TOC call 0x%08x
+GET TOC called
+READ ILinkID call 
+WRITE ILinkID call 
+READ Console call 
+WRITE ConsoleID call 
+GET Mecacon Version call 
+READ SUBQ call 
+ForbidDVDP call
+Ctrl Audio Digital out call 
+Auto Ajust Ctrl call 
+READ RTC call 
+WRITE RTC call 0x%08x
+READ NVM call 
+WRITE NVM call 0x%08x
+SET HD mode call 
+OpenConfig call 
+sceCdOpenConfig blk %d ret %d
+CloseConfig call 
+readConfig ret %d : status %d
+ReadConfig call 
+WriteConfig call 
+writeConfig ret %d : status %d
+READ KEY call 0x%08x
+DEC SET call 0x%08x
+Tray req call 
+Call Seek lsn= %d
+Call Seek end
+Call Standby
+Call Stop
+Call Pause
+sce_cdvd no block IO :unrecognized code %x
+call get error code= 0x%08x
+sce_cdvd block IO :unrecognized code 0x%02x
