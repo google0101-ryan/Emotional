@@ -7,6 +7,8 @@ void SubsystemInterface::write(uint32_t addr, uint32_t data)
     uint16_t offset = (addr >> 4) & 0xF;
     auto ptr = (uint32_t*)&regs + offset;
 
+    printf("[emu/Sif%s]: Writing 0x%08x to 0x%08x\n", comp ? "EE" : "Iop", data, addr);
+
     if (offset == 4)
     {
         auto& ctrl = regs.ctrl;
@@ -43,6 +45,9 @@ uint32_t SubsystemInterface::read(uint32_t addr)
     auto comp = (addr >> 9) & 0x1;
     uint16_t offset = (addr >> 4) & 0xF;
     auto ptr = (uint32_t*)&regs + offset;
+
+    if (!comp)
+        printf("[emu/Sif%s]: Reading 0x%08x from 0x%08x\n", comp ? "EE" : "Iop", *ptr, addr);
 
     return *ptr;
 }

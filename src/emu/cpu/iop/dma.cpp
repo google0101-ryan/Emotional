@@ -36,106 +36,90 @@ int GetChannelFromAddr(uint8_t addr)
     return 0;
 }
 
+constexpr const char* REGS[] =
+{
+	"Dn_MADR", "Dn_BCR",
+	"Dn_CHCR", "Dn_TADR"
+};
+
+constexpr const char* GLOBALS[] =
+{
+	"DPCR", "DICR", "DPCR2",
+	"DICR2", "DMACEN", "DMACINTEN"
+};
+
+
 void IoDma::write(uint32_t addr, uint32_t data)
 {
-    if ((addr >= 0x1F801080 && addr <= 0x1F8010EC) || (addr >= 0x1f801500 && addr <= 0x1f80155C))
+    uint16_t group = (addr >> 8) & 1;
+
+    if ((addr & 0x70) == 0x70)
     {
-        int channel = GetChannelFromAddr(addr & 0xF0);
+        uint16_t offset = ((addr & 0xf) >> 2) + 2 * group;
+        auto ptr = (uint32_t*)&globals + offset;
+        //printf("[emu/IoDma]: Writing 0x%08x to %s\n", data, GLOBALS[offset]);
 
-        printf("Channel %d -> %d\n", channel, addr & 0xF);
-
-        switch (addr & 0xF)
+        if (offset == 1)
         {
-        case 0:
-            channels[channel].madr = data;
-            return;
-        case 4:
-            channels[channel].bcr = data;
-            return;
-        case 8:
-            channels[channel].chcr = data;
-            return;
-        case 0xC:
-            channels[channel].tadr = data;
-            return;
+            auto& irq = globals.dicr;
+            auto flags = irq.flags;
+
+            irq.value = data;
+            irq.flags = flags & ~((data >> 24) & 0x7f);
+            irq.master_flag = irq.force || (irq.master_enable && ((irq.enable & irq.flags) > 0));
+        }
+        else if (offset == 3)
+        {
+            auto& irq = globals.dicr2;
+            auto flags = irq.flags;
+
+            irq.value = data;
+            irq.flags = flags & ~((data >> 24) & 0x7f);
+        }
+        else
+        {
+            *ptr = data;
         }
     }
-
-    switch (addr)
+    else
     {
-    case 0x1f8010f0:
-        dpcr.value = data;
-        break;
-    case 0x1f8010f4:
-        dicr.value = data;
-        break;
-    case 0x1f801570:
-        dpcr2.value = data;
-        break;
-    case 0x1f801574:
-        dicr2.value = data;
-        break;
-    case 0x1f801578:
-        glob_enable = data;
-        break;
-    default:
-        printf("[emu/IopDma]: %s: Write to unknown addr 0x%08x\n", __FUNCTION__, addr);
-        exit(1);
+        uint16_t channel = ((addr & 0x70) >> 4) + group * 7;
+        uint16_t offset = (addr & 0xf) >> 2;
+        auto ptr = (uint32_t*)&channels[channel] + offset;
+
+        printf("[emu/IoDma]: Writing 0x%08x to %s on channel %d\n", data, REGS[offset], channel);
+        *ptr = data;
+
+        if (channels[channel].control.running)
+        {
+            printf("[emu/IoDma]: Started transfer on channel %d\n", channel);
+        }
     }
 }
 
 uint32_t IoDma::read(uint32_t addr)
 {
-    switch (addr)
+    uint16_t group = (addr >> 8) & 1;
+
+    if ((addr & 0x70) == 0x70)
     {
-    case 0x1f8010f0:
-        return dpcr.value;
-    case 0x1f8010f4:
-        return dicr.value;
-    case 0x1f801570:
-        return dpcr2.value;
-    case 0x1f801574:
-        return dicr2.value;
-    case 0x1f801578:
-        return glob_enable;
-    default:
-        printf("[emu/IopDma]: %s: Write to unknown addr 0x%08x\n", __FUNCTION__, addr);
-        exit(1);
+        uint16_t offset = ((addr & 0xf) >> 2) + 2 * group;
+        auto ptr = (uint32_t*)&globals + offset;
+        //printf("[emu/IoDma]: Reading from %s in global registers\n", GLOBALS[offset]);
+        return *ptr;
+    }
+    else
+    {
+        uint16_t channel = ((addr & 0x70) >> 4) + group * 7;
+		uint16_t offset = (addr & 0xf) >> 2;
+        auto ptr = (uint32_t*)&channels[channel] + offset;
+        printf("[emu/IoDma]: Reading from %s in channel %d\n", REGS[offset], channel);
+        return *ptr;
     }
 }
 
 void IoDma::tick(int cycles)
 {
     for (int cycle = cycles; cycle > 0; cycle--)
-    {
-        for (int c = 0; c < 13; c++)
-        {
-            if (channels[c].chcr & (1 << 24) && glob_enable)
-            {
-                printf("Channel %d running\n", c);
-                if (channels[c].bcr > 0)
-                {
-                    if (c == 10)
-                    {    
-                        auto sif = bus->GetSif();
-                        if (sif->fifo1.size())
-                        {
-                            printf("Transfering word\n");
-                            auto data = sif->fifo1.front();
-                            sif->fifo1.pop();
-                            bus->write<uint32_t>(channels[c].madr, data);
-                            channels[c].madr += 4;
-                            channels[c].bcr--;
-                        }
-                    }
-                    else
-                    {                        
-                        printf("0x%04x\n", channels[c].bcr);
-                        printf("[emu/IopDma]: Should start channel %d\n", c);
-                        exit(1);
-                    }
-                }
-            }
-        }
-    }
+    {}
 }

@@ -45,12 +45,17 @@ bool Application::Init(int argc, char** argv)
     return true;
 }
 
+static uint64_t total_cycles = 0;
+bool vblank_started = false;
+
 int Application::Run()
 {
     while (isRunning)
     {
-        ee->Clock(32);
-        bus->Clock();
+            ee->Clock(32);
+            bus->Clock();
+
+            total_cycles += 32;
     }
     return exit_code;
 }
