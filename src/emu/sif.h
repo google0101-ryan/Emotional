@@ -8,6 +8,7 @@ struct SIFRegs
     uint32_t mscom;
     uint32_t smcom;
     uint32_t msflag;
+    uint32_t smflag;
     uint32_t ctrl;
     uint32_t padding;
     uint32_t bd6;
