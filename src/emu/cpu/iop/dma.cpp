@@ -1,40 +1,7 @@
 #include <emu/cpu/iop/dma.h>
 #include <app/Application.h>
 #include <emu/iopbus.h>
-
-int GetChannelFromAddr(uint8_t addr)
-{
-    switch (addr)
-    {
-    case 0x00:
-        return 7;
-    case 0x10:
-        return 8;
-    case 0x20:
-        return 9;
-    case 0x30:
-        return 10;
-    case 0x40:
-        return 11;
-    case 0x50:
-        return 12;
-    case 0x80:
-        return 0;
-    case 0x90:
-        return 1;
-    case 0xA0:
-        return 2;
-    case 0xB0:
-        return 3;
-    case 0xC0:
-        return 4;
-    case 0xD0:
-        return 5;
-    case 0xE0:
-        return 6;
-    }
-    return 0;
-}
+#include <emu/Bus.h>
 
 constexpr const char* REGS[] =
 {
@@ -122,6 +89,33 @@ void IoDma::tick(int cycles)
 {
     for (int cycle = cycles; cycle > 0; cycle--)
     {
-        
+        for (int id = 7; id < 13; id++)
+		{
+			auto& channel = channels[id];
+			bool enable = globals.dpcr2 & (1 << ((id - 7) * 4 + 3));
+			if (channel.control.running && enable)
+			{
+				switch (id)
+				{
+				case DMAChannels::SIF1:
+				{
+					auto sif = bus->GetSif();
+					if (!sif->fifo1.empty())
+					{
+						auto data = sif->fifo1.front();
+						sif->fifo1.pop();
+
+						bus->write<uint32_t>(channel.address, data);
+						channel.address += 4;
+						channel.block_conf.count--;
+					}
+					break;
+				}
+				default:
+					printf("Transfer on unknown channel %d\n", id);
+					exit(1);
+				}
+			}
+		}
     }
 }

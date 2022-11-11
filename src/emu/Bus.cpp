@@ -43,7 +43,7 @@ Bus::Bus(std::string fileName, bool& s)
 
     sif = new SubsystemInterface();
 
-    iop_bus = new IopBus(bios, iop_ram, sif);
+    iop_bus = new IopBus(bios, iop_ram, sif, this);
     iop = new IoProcessor(this);
 }
 

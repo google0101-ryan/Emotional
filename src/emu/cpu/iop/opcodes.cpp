@@ -38,7 +38,7 @@ void IoProcessor::j(Opcode i)
 
 void IoProcessor::jal(Opcode i)
 {
-    regs[31] = next_pc;
+    regs[31] = pc+4;
     next_pc = (next_pc & 0xF0000000) | (i.j_type.target << 2);
     //printf("jal 0x%08x\n", next_pc);
 }
@@ -118,8 +118,9 @@ void IoProcessor::addiu(Opcode i)
     int rt = i.i_type.rt;
     int rs = i.i_type.rs;
     int16_t imm = (int16_t)i.i_type.imm;
+	int32_t reg = regs[rs];
 
-    set_reg(rt, regs[rs] + imm);
+    set_reg(rt, reg + imm);
 
     //printf("addiu %s, %s, 0x%04x\n", Reg(rt), Reg(rs), imm);
 }
@@ -130,7 +131,7 @@ void IoProcessor::slti(Opcode i)
     int rs = i.i_type.rs;
 
     int32_t reg = (int32_t)regs[rs];
-    int32_t imm = (int32_t)i.i_type.imm;
+    int32_t imm = (int16_t)i.i_type.imm;
 
     set_reg(rt, reg < imm);
 
@@ -192,7 +193,7 @@ void IoProcessor::cop0(Opcode i)
         mtc0(i);
         break;
     default:
-        //printf("[emu/CPU]: %s: Unknown cop0 opcode 0x%08x (0x%02x)\n", __FUNCTION__, i.full, i.r_type.rs);
+        printf("[emu/CPU]: %s: Unknown cop0 opcode 0x%08x (0x%02x)\n", __FUNCTION__, i.full, i.r_type.rs);
         Application::Exit(1);
     }
 }
@@ -205,11 +206,11 @@ void IoProcessor::lb(Opcode i)
 
     uint32_t addr = regs[base] + off;
 
-    if (!isCacheIsolated())
-    {
+    // if (!isCacheIsolated())
+    // {
         next_load_delay.data = (int8_t)bus->read_iop<uint8_t>(addr);
         next_load_delay.reg = rt;
-    }
+    // }
 
     //printf("lb %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
@@ -222,11 +223,11 @@ void IoProcessor::lh(Opcode i)
 
     uint32_t addr = regs[base] + off;
 
-    if (!isCacheIsolated())
-    {
+    // if (!isCacheIsolated())
+    // {
         next_load_delay.reg = rt;
         next_load_delay.data = (int16_t)bus->read_iop<uint16_t>(addr);
-    }
+    // }
 
     //printf("lh %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
@@ -240,11 +241,11 @@ void IoProcessor::lw(Opcode i)
     uint32_t addr = regs[base] + off;
 
 
-    if (!isCacheIsolated())
-    {
+    // if (!isCacheIsolated())
+    // {
         next_load_delay.data = bus->read_iop<uint32_t>(addr);
         next_load_delay.reg = rt;
-    }
+    // }
 
     //printf("lw %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
@@ -257,11 +258,11 @@ void IoProcessor::lbu(Opcode i)
 
     uint32_t addr = regs[base] + off;
 
-    if (!isCacheIsolated())
-    {
+    // if (!isCacheIsolated())
+    // {
         next_load_delay.data = bus->read_iop<uint8_t>(addr);
         next_load_delay.reg = rt;
-    }
+    // }
 
     //printf("lbu %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
@@ -274,11 +275,11 @@ void IoProcessor::lhu(Opcode i)
 
     uint32_t addr = regs[base] + off;
 
-    if (!isCacheIsolated())
-    {
+    // if (!isCacheIsolated())
+    // {
         next_load_delay.data = bus->read_iop<uint16_t>(addr);
         next_load_delay.reg = rt;
-    }
+    // }
 
     //printf("lhu %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
@@ -391,7 +392,7 @@ void IoProcessor::jr(Opcode i)
 
 void IoProcessor::jalr(Opcode i)
 {
-    regs[i.r_type.rd] = next_pc;
+    regs[i.r_type.rd] = pc+4;
     next_pc = regs[i.r_type.rs];
     //printf("jalr %s, %s\n", Reg(i.r_type.rs), Reg(i.r_type.rd));
 }
@@ -407,11 +408,11 @@ void IoProcessor::syscall(Opcode i)
     Cop0.cause.excode = (uint32_t)8;
     Cop0.cause.CE = 0;
 
-    Cop0.epc = i.pc;
+    Cop0.epc = i.pc+4;
 
     pc = exception_addr[Cop0.status.BEV];
 
-    //printf("syscall\n");
+    printf("[emu/IOP] syscall\n");
 }
 
 void IoProcessor::addu(Opcode i)
@@ -420,7 +421,10 @@ void IoProcessor::addu(Opcode i)
     int rd = i.r_type.rd;
     int rs = i.r_type.rs;
 
-    set_reg(rd, regs[rs] + regs[rt]);
+	int32_t reg1 = (int32_t)regs[rs];
+	int32_t reg2 = (int32_t)regs[rt];
+
+    set_reg(rd, reg1 + reg2);
 
     //printf("addu %s, %s (0x%08x), %s (0x%08x)\n", Reg(rd), Reg(rs), regs[rs], Reg(rt), regs[rt]);
 }
@@ -431,7 +435,10 @@ void IoProcessor::add(Opcode i)
     int rd = i.r_type.rd;
     int rs = i.r_type.rs;
 
-    set_reg(rd, regs[rs] + regs[rt]);
+	int32_t reg1 = (int32_t)regs[rs];
+	int32_t reg2 = (int32_t)regs[rt];
+
+    set_reg(rd, reg1 + reg2);
 
     //printf("add %s, %s (0x%08x), %s (0x%08x)\n", Reg(rd), Reg(rs), regs[rs], Reg(rt), regs[rt]);
 }

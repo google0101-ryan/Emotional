@@ -87,79 +87,6 @@ private:
 
     bool isCacheEnabled = false;
 
-    uint32_t Read32(uint32_t addr, bool isInstr = false)
-    {
-        if (!bus->IsCacheable(addr) || !isCacheEnabled || !isInstr)
-            return bus->read<uint32_t>(addr);
-
-        int index = (addr >> 6) & 0xFF;
-        uint16_t tag = addr >> 13;
-        int off = addr & 0x3F;
-
-        ICacheLine& line = icache[index];
-
-        if (line.tag[0] != tag)
-        {
-            if (line.tag[1] != tag)
-            {
-                printf("Cache miss for addr 0x%08x\n", addr);
-                if (line.tag[0] & (1 << 31))
-                {
-                    line.lfu[0] ^= true;
-                    line.tag[0] = tag;
-                    for (int i = 0; i < 64; i++)
-                        line.data[0][i] = bus->read<uint8_t>((addr & 0xFFFFFFC0) + i);
-                    return *(uint32_t*)&line.data[0][off];
-                }
-                else if (line.tag[1] & (1 << 31))
-                {
-                    line.lfu[1] ^= true;
-                    line.tag[1] = tag;
-                    for (int i = 0; i < 64; i++)
-                        line.data[1][i] = bus->read<uint8_t>((addr & 0xFFFFFFC0) + i);
-                    return *(uint32_t*)&line.data[1][off];
-                }
-                else
-                {
-                    int replace = line.lfu[0] ^ line.lfu[1];
-                    line.lfu[replace] ^= true;
-                    line.lfu[replace] = tag;
-                    for (int i = 0; i < 64; i++)
-                        line.data[replace][i] = bus->read<uint8_t>((addr & 0xFFFFFFC0) + i);
-                    return *(uint32_t*)&line.data[replace][off];
-                }
-            }
-            else
-            {
-                return *(uint32_t*)&line.data[1][off];
-            }
-        }
-        else
-        {
-            return *(uint32_t*)&line.data[0][off];
-        }
-    }
-
-    void Write32(uint32_t addr, uint32_t data)
-    {
-        if (!bus->IsCacheable(addr) || !isCacheEnabled)
-        {
-            bus->write(addr, data);
-            return;
-        }
-
-        
-    }
-
-    void Write64(uint32_t addr, uint64_t data)
-    {
-        if (!bus->IsCacheable(addr) || !isCacheEnabled)
-        {
-            bus->write(addr, data);
-            return;
-        }
-    }
-
     bool singleStep = false;
 
     void j(Opcode i); // 0x02
@@ -325,6 +252,8 @@ private:
             return "";
         }
     }
+
+	bool branch_taken = false;
 public:
     EmotionEngine(Bus* bus, VectorUnit* vu0);
 

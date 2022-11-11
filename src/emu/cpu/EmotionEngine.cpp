@@ -16,6 +16,7 @@ vu0(vu0)
     next_instr = {};
     next_instr.full = bus->read<uint32_t>(pc);
     next_instr.pc = pc;
+	pc += 4;
 
     cop0_regs[15] = 0x2E20;
 
@@ -444,6 +445,12 @@ void EmotionEngine::Clock(int cycles)
     cop0_regs[9] += cycles + std::abs(cycles_to_execute);
 
     regs[0].u64[0] = regs[0].u64[1] = 0;
+
+	if (bus->read<uint32_t>(0x1000f000) & bus->read<uint32_t>(0x1000f010))
+	{
+		printf("Need to trigger interrupt here\n");
+		exit(1);
+	}
 }
 
 void EmotionEngine::Dump()

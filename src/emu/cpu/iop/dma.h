@@ -3,6 +3,7 @@
 #include <util/uint128.h>
 
 class IopBus;
+class Bus;
 
 class IoDma
 {
@@ -130,9 +131,10 @@ private:
     bool transfer_pending = false;
 
     IopBus* bus;
+	Bus* parent;
 public:
-    IoDma(IopBus* bus)
-    : bus(bus) {}
+    IoDma(IopBus* bus, Bus* ee_bus)
+    : bus(bus), parent(ee_bus) {}
 
     void tick(int cycles);
 

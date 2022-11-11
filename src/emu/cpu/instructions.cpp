@@ -10,6 +10,9 @@ void EmotionEngine::j(Opcode i)
 {
     uint32_t target = i.j_type.target;
     pc = ((instr.pc + 4) & 0xF0000000) | (target << 2);
+
+	next_instr.is_delay_slot = true;
+	branch_taken = true;
     //printf("j 0x%08x\n", pc);
 }
 
@@ -18,6 +21,9 @@ void EmotionEngine::jal(Opcode i)
     uint32_t target = i.j_type.target;
     regs[31].u64[0] = instr.pc + 8;
     pc = ((instr.pc + 4) & 0xF0000000) | (target << 2);
+
+	next_instr.is_delay_slot = true;
+	branch_taken = true;
     //printf("jal 0x%08x\n", pc);
 }
 
@@ -31,7 +37,10 @@ void EmotionEngine::beq(Opcode i)
     if (regs[rs].u64[0] == regs[rt].u64[0])
     {
         pc = instr.pc + offset + 4;
+		branch_taken = true;
     }
+
+	next_instr.is_delay_slot = true;
 
     //printf("beq %s, %s, 0x%08x\n", Reg(rs), Reg(rt), instr.pc + offset);
 
@@ -51,8 +60,11 @@ void EmotionEngine::bne(Opcode i)
     int32_t offset = imm << 2;
     if (regs[rs].u64[0] != regs[rt].u64[0])
     {
+		branch_taken = true;
         pc = instr.pc + offset + 4;
     }
+
+	instr.is_delay_slot = true;
 
     //printf("beq %s, %s, 0x%08x\n", Reg(rs), Reg(rt), instr.pc + offset);
 }
@@ -67,7 +79,10 @@ void EmotionEngine::blez(Opcode i)
     if (reg <= 0)
     {
         pc = instr.pc + offset + 4;
+		branch_taken = true;
     }
+
+	next_instr.is_delay_slot = true;
 
     //printf("blez %s, 0x%08x\n", Reg(rs), instr.pc + offset);
 }
@@ -85,8 +100,11 @@ void EmotionEngine::bgtz(Opcode i)
 
     if (reg > 0)
     {
+		branch_taken = true;
         pc = instr.pc + 4 + imm;
     }
+
+	next_instr.is_delay_slot = true;
 }
 
 void EmotionEngine::addiu(Opcode i)
@@ -126,26 +144,44 @@ void EmotionEngine::sltiu(Opcode i)
 
 void EmotionEngine::andi(Opcode i)
 {
-    regs[i.i_type.rt].u64[0] = regs[i.i_type.rs].u64[0] & (uint64_t)i.i_type.imm;
-    //printf("andi %s, %s, 0x%08x\n", Reg(i.i_type.rt), Reg(i.i_type.rs), i.i_type.imm);
+    int rt = i.i_type.rt;
+	int rs = i.i_type.rs;
+	uint64_t imm = i.i_type.imm;
+
+	regs[rt].u64[0] = regs[rs].u64[0] & imm;
+	
+	//printf("andi %s, %s, 0x%08x\n", Reg(i.i_type.rt), Reg(i.i_type.rs), i.i_type.imm);
 }
 
 void EmotionEngine::ori(Opcode i)
 {
-    regs[i.i_type.rt].u64[0] = regs[i.i_type.rs].u64[0] | (uint64_t)i.i_type.imm;
-    //printf("ori %s, %s, 0x%08x\n", Reg(i.i_type.rt), Reg(i.i_type.rs), i.i_type.imm);
+    int rt = i.i_type.rt;
+	int rs = i.i_type.rs;
+	uint16_t imm = i.i_type.imm;
+
+	regs[rt].u64[0] = regs[rs].u64[0] | (uint64_t)imm;
+	
+	//printf("ori %s, %s, 0x%08x\n", Reg(i.i_type.rt), Reg(i.i_type.rs), i.i_type.imm);
 }
 
 void EmotionEngine::xori(Opcode i)
 {
-    regs[i.i_type.rt].u64[0] = regs[i.i_type.rs].u64[0] ^ (uint64_t)i.i_type.imm;
-    //printf("xori %s, %s, 0x%08x\n", Reg(i.i_type.rt), Reg(i.i_type.rs), i.i_type.imm);
+    int rt = i.i_type.rt;
+	int rs = i.i_type.rs;
+	uint64_t imm = i.i_type.imm;
+
+	regs[rt].u64[0] = regs[rs].u64[0] ^ imm;
+    
+	//printf("xori %s, %s, 0x%08x\n", Reg(i.i_type.rt), Reg(i.i_type.rs), i.i_type.imm);
 }
 
 void EmotionEngine::lui(Opcode i)
 {
+	int rt = i.i_type.rt;
     uint32_t imm = i.i_type.imm;
-    regs[i.i_type.rt].u64[0] = (int32_t)(imm << 16);
+	
+	regs[rt].u64[0] = (int32_t)(imm << 16);
+
     //printf("lui %s, 0x%08lx\n", Reg(i.i_type.rt), regs[i.i_type.rt].u64[0]);
 }
 
@@ -171,6 +207,7 @@ void EmotionEngine::beql(Opcode i)
     if (regs[i.i_type.rs].u64[0] == regs[i.i_type.rt].u64[0])
     {
         pc = instr.pc + 4 + imm;
+		branch_taken = true;
     }
     else
         fetch_next(); // Skip delay slot
@@ -203,19 +240,18 @@ void EmotionEngine::ldl(Opcode i)
     };
     static const uint8_t LDL_SHIFT[8] = { 56, 48, 40, 32, 24, 16, 8, 0 };
 
-    int rt = i.i_type.rt;
-    int base = i.i_type.rs;
+    uint16_t rt = i.i_type.rt;
+    uint16_t base = i.i_type.rs;
     int16_t offset = (int16_t)i.i_type.imm;
 
-    int32_t reg = regs[base].u32[0];
-    uint32_t addr = reg + offset;
-
-    uint32_t aligned_addr = addr & ~7;
+    /* The address given is unaligned, so let's align it first */
+    uint32_t addr = offset + regs[base].u32[0];
+    uint32_t aligned_addr = addr & ~0x7;
     uint32_t shift = addr & 0x7;
 
-    auto dword = bus->read<uint64_t>(aligned_addr);
-    uint64_t result = (regs[rt].u64[0] >> LDL_SHIFT[shift]) | (dword & LDL_MASK[shift]);
-    regs[rt].u64[0] = result;
+	auto dword = bus->read<uint64_t>(aligned_addr);
+	uint64_t result = (regs[rt].u64[0] & LDL_MASK[shift]) | (dword << LDL_SHIFT[shift]);
+	regs[rt].u64[0] = result;
 
     //printf("ldl %s, %s(0x%08x)\n", Reg(rt), Reg(base), reg);
 }
@@ -229,16 +265,14 @@ void EmotionEngine::ldr(Opcode i)
     };
     static const uint8_t LDR_SHIFT[8] = { 0, 8, 16, 24, 32, 40, 48, 56 };
 
-
-    int rt = i.i_type.rt;
-    int base = i.i_type.rs;
+    uint16_t rt = i.i_type.rt;
+    uint16_t base = i.i_type.rs;
     int16_t offset = (int16_t)i.i_type.imm;
 
-    int32_t reg = regs[base].u32[0];
-    uint32_t addr = reg + offset;
-
-    uint32_t aligned_addr = addr & ~7;
-    uint32_t shift = addr & 0x7;
+    /* The address given is unaligned, so let's align it first */
+    uint32_t addr = offset + regs[base].u32[0];
+    uint32_t aligned_addr = addr & ~0x7;
+    uint16_t shift = addr & 0x7;
 
     auto dword = bus->read<uint64_t>(aligned_addr);
     uint64_t result = (regs[rt].u64[0] & LDR_MASK[shift]) | (dword >> LDR_SHIFT[shift]);
@@ -283,8 +317,6 @@ void EmotionEngine::sq(Opcode i)
     bus->write(addr, regs[rt].u128);
 
     //printf("sq %s, %d(%s(0x%x))\n", Reg(rt), off, Reg(base), regs[base].u32[0]);
-
-    singleStep = true;
 }
 
 void EmotionEngine::lb(Opcode i)
@@ -295,7 +327,7 @@ void EmotionEngine::lb(Opcode i)
 
     uint32_t addr = regs[base].u32[0] + off;
 
-    regs[rt].u64[0] = (int64_t)((uint8_t)(Read32(addr) & 0xFF));
+    regs[rt].u64[0] = (int8_t)bus->read<uint8_t>(addr);
 
     //printf("lb %s, %d(%s(%s))\n", Reg(rt), off, Reg(base), print_128(regs[rt]));
 }
@@ -323,7 +355,7 @@ void EmotionEngine::lw(Opcode i)
 
     if (addr & 0x3)
     {
-        //printf("lw: Unaligned address\n");
+        printf("lw: Unaligned address\n");
         exit(1);
     }
 
@@ -340,7 +372,7 @@ void EmotionEngine::lbu(Opcode i)
 
     uint32_t addr = regs[base].u32[0] + off;
 
-    regs[rt].u64[0] = (Read32(addr) & 0xFF);
+    regs[rt].u64[0] = bus->read<uint8_t>(addr);
 
     //printf("lbu %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
@@ -353,7 +385,7 @@ void EmotionEngine::lhu(Opcode i)
 
     uint32_t addr = regs[base].u32[0] + off;
 
-    regs[rt].u64[0] = (Read32(addr) & 0xFFFF);
+    regs[rt].u64[0] = bus->read<uint16_t>(addr);
 
     //printf("lhu %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
@@ -366,7 +398,7 @@ void EmotionEngine::lwu(Opcode i)
 
     uint32_t addr = regs[base].u32[0] + off;
 
-    regs[rt].u64[0] = Read32(addr);
+    regs[rt].u64[0] = bus->read<uint32_t>(addr);
 
     //printf("lwu %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
@@ -392,7 +424,7 @@ void EmotionEngine::sh(Opcode i)
 
     uint32_t addr = regs[base].u32[0] + off;
 
-    bus->write<uint16_t>(addr, regs[rt].u32[0]);
+    bus->write<uint16_t>(addr, regs[rt].u16[0]);
 
     //printf("sh %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
@@ -407,7 +439,7 @@ void EmotionEngine::sw(Opcode i)
 
     //printf("sw %s, %d(%s) -> (0x%08x)\n", Reg(rt), off, Reg(base), addr);
 
-    Write32(addr, regs[rt].u32[0]);
+    bus->write<uint32_t>(addr, regs[rt].u32[0]);
 }
 
 void EmotionEngine::sdl(Opcode i)
@@ -418,15 +450,14 @@ void EmotionEngine::sdl(Opcode i)
         0xffffff0000000000ULL, 0xffff000000000000ULL, 0xff00000000000000ULL, 0x0000000000000000ULL
     };
     static const uint8_t SDL_SHIFT[8] = { 56, 48, 40, 32, 24, 16, 8, 0 };
-    
-    int rt = i.i_type.rt;
-    int base = i.i_type.rs;
+
+    uint16_t rt = i.i_type.rt;
+    uint16_t base = i.i_type.rs;
     int16_t offset = (int16_t)i.i_type.imm;
 
-    int32_t reg = regs[base].u32[0];
-    uint32_t addr = reg + offset;
-
-    uint32_t aligned_addr = addr & ~7;
+    /* The address given is unaligned, so let's align it first */
+    uint32_t addr = offset + regs[base].u32[0];
+    uint32_t aligned_addr = addr & ~0x7;
     uint32_t shift = addr & 0x7;
 
     auto dword = bus->read<uint64_t>(aligned_addr);
@@ -440,24 +471,22 @@ void EmotionEngine::sdr(Opcode i)
 {
     static const uint64_t SDR_MASK[8] =
     {
-        0x0000000000000000ULL, 0xff00000000000000ULL, 0xffff000000000000ULL, 0xffffff0000000000ULL,
-        0xffffffff00000000ULL, 0xffffffffff000000ULL, 0xffffffffffff0000ULL, 0xffffffffffffff00ULL
+        0x0000000000000000ULL, 0x00000000000000ffULL, 0x000000000000ffffULL, 0x0000000000ffffffULL,
+        0x00000000ffffffffULL, 0x000000ffffffffffULL, 0x0000ffffffffffffULL, 0x00ffffffffffffffULL
     };
     static const uint8_t SDR_SHIFT[8] = { 0, 8, 16, 24, 32, 40, 48, 56 };
 
-
-    int rt = i.i_type.rt;
-    int base = i.i_type.rs;
+    uint16_t rt = i.i_type.rt;
+    uint16_t base = i.i_type.rs;
     int16_t offset = (int16_t)i.i_type.imm;
 
-    int32_t reg = regs[base].u32[0];
-    uint32_t addr = reg + offset;
-
-    uint32_t aligned_addr = addr & ~7;
+    /* The address given is unaligned, so let's align it first */
+    uint32_t addr = offset + regs[base].u32[0];
+    uint32_t aligned_addr = addr & ~0x7;
     uint32_t shift = addr & 0x7;
 
     auto dword = bus->read<uint64_t>(aligned_addr);
-    dword = (regs[rt].u64[0] & SDR_MASK[shift]) | (dword >> SDR_SHIFT[shift]);
+    dword = (regs[rt].u64[0] << SDR_SHIFT[shift]) | (dword & SDR_MASK[shift]);
     bus->write<uint64_t>(aligned_addr, dword);
 
     //printf("sdr %s, %s(0x%08x)\n", Reg(rt), Reg(base), reg);
@@ -484,7 +513,7 @@ void EmotionEngine::swc1(Opcode i)
 
     uint32_t addr = regs[base].u32[0] + off;
 
-    Write32(addr, cop1.regs.i[rt]);
+    bus->write<uint32_t>(addr, cop1.regs.i[rt]);
 
     //printf("swc1 f%d, %d(%s)\n", rt, off, Reg(base));
 }
@@ -506,6 +535,9 @@ void EmotionEngine::sd(Opcode i)
 void EmotionEngine::jr(Opcode i)
 {
     pc = regs[i.r_type.rs].u32[0];
+
+	next_instr.is_delay_slot = true;
+	branch_taken = true;
     //printf("jr %s (0x%08x)\n", Reg(i.r_type.rs), pc);
 }
 
@@ -566,9 +598,8 @@ void EmotionEngine::srlv(Opcode i)
     int rd = i.r_type.rd;
     int rt = i.r_type.rt;
 
-    uint32_t reg = regs[rt].u32[0];
     uint16_t sa = regs[rs].u32[0] & 0x3f;
-    regs[rd].u64[0] = (int32_t)(reg >> sa);
+    regs[rd].u64[0] = (int32_t)(regs[rt].u32[0] >> sa);
 
     //printf("srlv %s, %s, %s\n", Reg(rd), Reg(rt), Reg(rs));
 }
@@ -593,6 +624,9 @@ void EmotionEngine::jalr(Opcode i)
     
     regs[rd].u64[0] = instr.pc + 8;
     pc = regs[rs].u32[0];
+
+	next_instr.is_delay_slot = true;
+	branch_taken = true;
 
     //printf("jalr %s, %s\n", Reg(rs), Reg(rd));
 }
@@ -873,39 +907,40 @@ void EmotionEngine::dsra32(Opcode i)
 
     //printf("dsra32 %s, %s, %d\n", Reg(rd), Reg(rt), sa);
 
-    regs[rd].u64[0] = regs[rt].u64[0] >> (sa + 32);
+	int64_t reg = (int64_t)regs[rt].u64[0];
+    regs[rd].u64[0] = reg >> (sa + 32);
 }
 
 void EmotionEngine::bltz(Opcode i)
 {
-    int rs = i.i_type.rs;
+    int32_t imm = (int16_t)i.i_type.imm;
+	uint16_t rs = i.i_type.rs;
 
-    int32_t val = (int32_t)regs[rs].u32[0];
-    int32_t off = (int32_t)((int16_t)(i.i_type.imm));
-    int32_t imm = off << 2;
+	int32_t offset = imm << 2;
+	int64_t reg = regs[rs].u64[0];
+	if (reg < 0)
+	{
+		pc = instr.pc + 4 + offset;
+		branch_taken = true;
+	}
 
-    //printf("bltz %s, 0x%08x\n", Reg(rs), instr.pc + off);
-
-    if (val < 0)
-    {
-        pc = instr.pc + 4 + imm;
-    }
+	next_instr.is_delay_slot = true;
 }
 
 void EmotionEngine::bgez(Opcode i)
 {
-    int rs = i.i_type.rs;
+    int32_t imm = (int16_t)i.i_type.imm;
+	uint16_t rs = i.i_type.rs;
 
-    int32_t val = (int32_t)regs[rs].u32[0];
-    int32_t off = (int32_t)((int16_t)(i.i_type.imm));
-    int32_t imm = off << 2;
+	int32_t offset = imm << 2;
+	int64_t reg = regs[rs].u64[0];
+	if (reg >= 0)
+	{
+		pc = instr.pc + 4 + offset;
+		branch_taken = true;
+	}
 
-    //printf("bgez %s, 0x%08x\n", Reg(rs), instr.pc + off);
-
-    if (val >= 0)
-    {
-        pc = instr.pc + 4 + imm;
-    }
+	next_instr.is_delay_slot = true;
 }
 
 
@@ -947,7 +982,7 @@ void EmotionEngine::divu1(Opcode i)
     }
     else
     {
-        //printf("DIVU1: Division by zero!\n");
+        printf("DIVU1: Division by zero!\n");
         Application::Exit(1);
     }
 }

@@ -9,6 +9,8 @@
 #include <emu/sif.h>
 #include <fstream>
 
+class Bus;
+
 class IopBus
 {
 private:
@@ -30,10 +32,10 @@ public:
     uint32_t GetICtrl() {return i_ctrl;}
     uint32_t GetIStat() {return i_stat;}
 
-    IopBus(uint8_t* pBios, uint8_t* pRam, SubsystemInterface* sif)
+    IopBus(uint8_t* pBios, uint8_t* pRam, SubsystemInterface* sif, Bus* parent)
     : bios(pBios), ram(pRam), sif(sif)
     {
-        dma = new IoDma(this);
+        dma = new IoDma(this, parent);
         dvd = new CDVD();
         timers = new Timer(this);
         console.open("iop_log.txt");

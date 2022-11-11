@@ -67,6 +67,8 @@ public:
         }
     }
 
+	uint8_t* grap_ee_ram() {return ram;}
+
     template<typename T>
     T read_iop(uint32_t addr)
     {
