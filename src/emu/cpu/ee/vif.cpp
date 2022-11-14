@@ -7,7 +7,7 @@ void VectorInterface::write(uint32_t addr, uint32_t data)
     switch (off)
     {
     case 0:
-        stat = data;
+        stat.fifo_detection = data & 0x800000;
         break;
     case 1:
         fbrst = data;
@@ -16,12 +16,74 @@ void VectorInterface::write(uint32_t addr, uint32_t data)
         err = data;
         break;
     case 3:
-        stat &= ~(1 << 6);
+        mark = data;
+		stat.mark = 0;
         break;
     default:
         printf("[emu/VIF%d]: %s: Write to unknown addr 0x%08x\n", id, __FUNCTION__, addr);
         exit(1);
     }
+}
+
+void VectorInterface::tick(int cycles)
+{
+	word_cycles = cycles * 4;
+	while (!fifo.empty() && word_cycles--)
+	{
+		if (!subpacket_count)
+			process_command();
+		else
+			execute_command();
+	}
+}
+
+void VectorInterface::process_command()
+{
+	command.value = fifo.front();
+	fifo.pop();
+
+	switch (command.command)
+	{
+	case VIFCommands::NOP:
+		printf("[emu/VIF%d]: nop\n", id);
+		break;
+	case VIFCommands::STCYCL:
+		cycle.value = command.immediate;
+		printf("[emu/VIF%d]: stcycl 0x%04x\n", id, command.immediate);
+		break;
+	case VIFCommands::BASE:
+		base = command.immediate & 0x3ff;
+		printf("[emu/VIF%d]: base 0x%08x\n", id, base);
+		break;
+	case VIFCommands::ITOP:
+		itop = command.immediate & 0x3ff;
+		printf("[emu/VIF%d]: itop 0x%04x\n", id, itop);
+		break;
+	case VIFCommands::STMASK:
+		subpacket_count = 1;
+		break;
+	default:
+		printf("Unknown VIF%d command 0x%02x\n", id, command.command);
+		exit(1);
+	}
+}
+
+void VectorInterface::execute_command() 
+{
+	uint32_t data = fifo.front(); 
+	fifo.pop();
+	switch (command.command)
+	{
+	case VIFCommands::STMASK:
+		mask = data;
+		printf("[emu/VIF%d]: stmask 0x%08x\n", id, data);
+		break;
+	default:
+		printf("Unknown execute VIF%d command 0x%02x\n", id, command.command);
+		exit(1);
+	}
+
+	subpacket_count--;
 }
 
 void VectorInterface::write_fifo(uint32_t data)

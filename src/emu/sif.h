@@ -23,10 +23,4 @@ public:
 
     void write(uint32_t addr, uint32_t data);
     uint32_t read(uint32_t addr);
-
-    size_t fifo_size() {return fifo0.size();}
-
-    uint32_t pop_fifo();
-    uint64_t pop_fifo64(); // Used exclusively for EE DMA
-    void push_fifo(uint32_t value);
 };

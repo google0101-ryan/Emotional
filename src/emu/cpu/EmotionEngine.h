@@ -44,20 +44,6 @@ private:
         } accumulator;
     } cop1;
 
-    struct LoadDelaySlot
-    {
-        uint32_t reg;
-        uint128_t value;
-    } cur_delay, next_delay;
-
-    void HandleLoadDelay()
-    {
-        regs[cur_delay.reg] = cur_delay.value;
-        cur_delay = next_delay;
-        next_delay.reg = 0;
-        next_delay.value.u64[0] = next_delay.value.u64[1] = 0;
-    }
-
     struct CacheTag
     {
         bool valid = false;
@@ -65,27 +51,6 @@ private:
         bool lrf = false;
         uint32_t page = 0;
     };
-
-    struct ICacheLine
-    {
-        bool lfu[2];
-        uint32_t tag[2];
-        uint8_t data[2][64];
-    };
-
-    ICacheLine icache[128];
-
-    struct DCacheLine
-    {
-        bool lfu[2];
-        bool dirty[2];
-        uint32_t tag[2];
-        uint8_t data[2][64];
-    };
-
-    DCacheLine dcache[64];
-
-    bool isCacheEnabled = false;
 
     bool singleStep = false;
 

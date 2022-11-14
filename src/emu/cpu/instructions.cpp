@@ -437,7 +437,7 @@ void EmotionEngine::sw(Opcode i)
 
     uint32_t addr = regs[base].u32[0] + off;
 
-    //printf("sw %s, %d(%s) -> (0x%08x)\n", Reg(rt), off, Reg(base), addr);
+    //printf("sw %s, %d(%s) -> (0x%08x, 0x%08x)\n", Reg(rt), off, Reg(base), addr, instr.pc);
 
     bus->write<uint32_t>(addr, regs[rt].u32[0]);
 }
@@ -586,7 +586,7 @@ void EmotionEngine::sllv(Opcode i)
     int rt = i.r_type.rt;
 
     uint32_t reg = regs[rt].u32[0];
-    uint16_t sa = regs[rs].u32[0] & 0x3f;
+    uint16_t sa = regs[rs].u32[0] & 0x1f;
     regs[rd].u64[0] = (int32_t)(reg << sa);
 
     //printf("sllv %s, %s, %s\n", Reg(rd), Reg(rt), Reg(rs));
@@ -598,7 +598,7 @@ void EmotionEngine::srlv(Opcode i)
     int rd = i.r_type.rd;
     int rt = i.r_type.rt;
 
-    uint16_t sa = regs[rs].u32[0] & 0x3f;
+    uint16_t sa = regs[rs].u32[0] & 0x1f;
     regs[rd].u64[0] = (int32_t)(regs[rt].u32[0] >> sa);
 
     //printf("srlv %s, %s, %s\n", Reg(rd), Reg(rt), Reg(rs));
@@ -611,7 +611,7 @@ void EmotionEngine::srav(Opcode i)
     int rt = i.r_type.rt;
 
     int32_t reg = (int32_t)regs[rt].u32[0];
-    uint16_t sa = regs[rs].u32[0] & 0x3f;
+    uint16_t sa = regs[rs].u32[0] & 0x1f;
     regs[rd].u64[0] = reg >> sa;
 
     //printf("srav %s, %s, %s\n", Reg(rd), Reg(rt), Reg(rs));

@@ -38,18 +38,21 @@ private:
 
     uint32_t Translate(uint32_t addr)
     {
-        if (addr <= 0x7FFFFFFF)
-            return addr;
-        else if (addr >= 0x80000000 && addr <= 0x9FFFFFFF)
-            return addr - 0x80000000;
-        else if (addr >= 0xA0000000 && addr <= 0xBFFFFFFF)
-            return addr - 0xA0000000;
-        else if (addr >= 0xC0000000 && addr <= 0xDFFFFFFF)
-            return addr - 0xC0000000;
-        else if (addr >= 0xE0000000 && addr <= 0xFFFFFFFF)
-            return addr - 0xE0000000;
-        else
-            return 0xFFFFFFFF;
+        constexpr uint32_t KUSEG_MASKS[8] = 
+        {
+            /* KUSEG: Don't touch the address, it's fine */
+            0xffffffff, 0xfffffff, 0xfffffff, 0xffffffff,
+            /* KSEG0: Strip the MSB (0x8 -> 0x0 and 0x9 -> 0x1) */
+            0x7fffffff,
+            /* KSEG1: Strip the 3 MSB's (0xA -> 0x0 and 0xB -> 0x1) */
+            0x1fffffff,
+            /* KSEG2: Don't touch the address, it's fine */
+            0xffffffff, 0x1fffffff,
+        };
+
+        addr &= KUSEG_MASKS[addr >> 29];
+
+		return addr;
     }
 public:
     Bus(std::string biosName, bool& success);
@@ -67,7 +70,7 @@ public:
         }
     }
 
-	uint8_t* grap_ee_ram() {return ram;}
+	uint8_t* grab_ee_ram() {return ram;}
 
     template<typename T>
     T read_iop(uint32_t addr)
@@ -297,23 +300,6 @@ public:
 
         printf("[emu/Bus]: %s: Write %ld to unknown addr 0x%08x\n", __FUNCTION__, sizeof(T), addr);
         exit(1);
-    }
-
-    // Returns whether a region of memory is cacheable by the bus
-    bool IsCacheable(uint32_t addr)
-    {
-        if (addr <= 0x7FFFFFFF)
-            return true;
-        else if (addr >= 0x80000000 && addr <= 0x9FFFFFFF)
-            return true;
-        else if (addr >= 0xA0000000 && addr <= 0xBFFFFFFF)
-            return false;
-        else if (addr >= 0xC0000000 && addr <= 0xDFFFFFFF)
-            return true;
-        else if (addr >= 0xE0000000 && addr <= 0xFFFFFFF)
-            return true;
-        else
-            return false;
     }
 
     VectorUnit* GetVU0() {return vu0;}

@@ -27,9 +27,8 @@ Bus::Bus(std::string fileName, bool& s)
     file.read((char*)bios, size);
 
     s = true;
-    printf("[emu/Bus]: %s: Bus initialized\n", __FUNCTION__);
-
-    console.open("log.txt");
+    
+	console.open("log.txt");
 
     gif = new GIF();
     gs = new GraphicsSynthesizer();
@@ -45,11 +44,15 @@ Bus::Bus(std::string fileName, bool& s)
 
     iop_bus = new IopBus(bios, iop_ram, sif, this);
     iop = new IoProcessor(this);
+
+	printf("[emu/Bus]: %s: Bus initialized\n", __FUNCTION__);
 }
 
 void Bus::Clock()
 {
     ee_dmac->tick(16);
+	vif0->tick(16);
+	vif1->tick(16);
     gif->tick(16);
 
     iop->Clock(4);

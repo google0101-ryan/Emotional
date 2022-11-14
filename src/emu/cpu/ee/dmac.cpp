@@ -120,7 +120,7 @@ void EmotionDma::tick(int cycles)
 
 						__uint128_t qword = *(__uint128_t*)data;
 						uint64_t upper = qword >> 64, lower = qword;
-						printf("[emu/IoDma]: Receiving packet from SIF0 0x%x%016x\n", upper, lower);
+						printf("[emu/IoDma]: Receiving packet from SIF0 0x%lx%016lx\n", upper, lower);
 
 						bus->write<__uint128_t>(channel.address, qword);
 

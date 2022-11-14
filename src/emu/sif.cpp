@@ -46,26 +46,8 @@ uint32_t SubsystemInterface::read(uint32_t addr)
     uint16_t offset = (addr >> 4) & 0xF;
     auto ptr = (uint32_t*)&regs + offset;
 
-    if (!comp && addr != 0x1d000020)
+    if (addr != 0x1d000020)
         printf("[emu/Sif%s]: Reading 0x%08x from 0x%08x\n", comp ? "EE" : "Iop", *ptr, addr);
 
     return *ptr;
-}
-
-uint32_t SubsystemInterface::pop_fifo()
-{
-    uint32_t data = fifo1.front();
-    fifo1.pop();
-    return data;
-}
-
-uint64_t SubsystemInterface::pop_fifo64()
-{
-    uint32_t data[2];
-    for (int i = 0; i < 2; i++)
-    {
-        data[i] = pop_fifo();
-    }
-
-    return *(uint64_t*)data;
 }

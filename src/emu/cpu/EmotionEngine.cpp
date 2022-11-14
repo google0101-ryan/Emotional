@@ -19,14 +19,6 @@ vu0(vu0)
 	pc += 4;
 
     cop0_regs[15] = 0x2E20;
-
-    for (int i = 0; i < 128; i++)
-    {
-        icache[i].tag[0] = 1 << 31;
-        icache[i].tag[1] = 1 << 31;
-        icache[i].lfu[0] = false;
-        icache[i].lfu[1] = false;
-    }
 }
 
 void EmotionEngine::Clock(int cycles)
@@ -37,6 +29,12 @@ void EmotionEngine::Clock(int cycles)
         instr = next_instr;
 
         fetch_next();
+
+		if (pc & 0x3)
+		{
+			printf("Unaligned PC: 0x%08x\n", pc);
+			Application::Exit(1);
+		}
 
         switch (instr.r_type.opcode)
         {
