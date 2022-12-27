@@ -116,7 +116,6 @@ void VectorUnit::special1(Opcode i)
     default:
         printf("[emu/CPU]: %s: Unknown cop2 special1 instruction 0x%08x (0x%02x)\n", __FUNCTION__, i.full, i.r_type.func);
         Application::Exit(1);
-        break;
     }
 }
 

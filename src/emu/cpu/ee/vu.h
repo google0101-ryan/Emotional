@@ -76,8 +76,7 @@ public:
     {
         if (index < 16)
             return i_regs[index].u;
-        printf("[emu/VU%d]: %s: Failed to read cop2 reg %d\n", id, __FUNCTION__, index);
-        exit(1);
+		return 0;
     }
 
     void ctc(int index, uint32_t data)
@@ -90,12 +89,6 @@ public:
 
         switch (index)
         {
-        case 16:
-            status = (((data >> 21) & 0x1) << 11) | (data & 0x7ff);
-            return;
-        case 18:
-            clip_flags = data;
-            return;
         case 20:
             R.u = data;
             return;
@@ -104,12 +97,6 @@ public:
             return;
         case 22:
             Q.u = data;
-            return;
-        case 27:
-            cmsar0 = data;
-            return;
-        case 28:
-            fbrst = data & ~0x303;
             return;
         }
 

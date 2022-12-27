@@ -37,4 +37,5 @@ struct Opcode
 
     uint32_t pc;
     bool is_delay_slot = false;
+	bool branch_taken = false;
 };

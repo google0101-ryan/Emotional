@@ -1,6 +1,7 @@
 #include <emu/cpu/iop/iop.h>
 #include <emu/Bus.h>
 #include <app/Application.h>
+#include "iop.h"
 
 IoProcessor::IoProcessor(Bus *bus)
     : bus(bus)
@@ -11,7 +12,46 @@ IoProcessor::IoProcessor(Bus *bus)
     Cop0.regs[15] = 0x1f;
 
     pc = 0xbfc00000;
-    next_pc = pc + 4;
+
+	direct_jump();
+}
+
+
+void IoProcessor::direct_jump()
+{
+	next_instr = {};
+	next_instr.full = bus->read_iop<uint32_t>(pc);
+	next_instr.pc = pc;
+	pc += 4;
+}
+
+void IoProcessor::handle_load_delay()
+{
+	if (delayed_memory_load.reg != memory_load.reg)
+	{
+		regs[memory_load.reg] = memory_load.data;
+	}
+
+	memory_load = delayed_memory_load;
+	delayed_memory_load.reg = 0;
+
+	regs[write_back.reg] = write_back.data;
+	write_back.reg = 0;
+	regs[0] = 0;
+}
+
+void IoProcessor::branch()
+{
+	int32_t imm = (int16_t)i.i_type.imm;
+
+	next_instr.branch_taken = true;
+	pc = next_instr.pc + (imm << 2);
+}
+
+void IoProcessor::load(uint32_t regN, uint32_t value)
+{
+	delayed_memory_load.reg = regN;
+	delayed_memory_load.data = value;
 }
 
 void IoProcessor::Clock(int cycles)
@@ -19,190 +59,54 @@ void IoProcessor::Clock(int cycles)
     for (int cycle = cycles; cycle > 0; cycle--)
     {
         if (singleStep)
-            getc(stdin);
-        if (pc == 0x12C48 || pc == 0x1420C || pc == 0x1430C)
-            bus->IopPrint(regs[5], regs[6]);
+        getc(stdin);
+        
+		i = next_instr;
 
-        Opcode instr;
-        instr.full = bus->read_iop<uint32_t>(pc);
+        if (i.pc == 0x12C48 || i.pc == 0x1420C || i.pc == 0x1430C)
+        bus->IopPrint(regs[5], regs[6]);
+		
+		if (pc & 0x3)
+		{
+			printf("Error: Unaligned address at 0x%08x\n", pc);
+			exit(1);
+		}
 
-        AdvancePC();
+		direct_jump();
 
-        if (instr.full == 0)
+		switch (i.opcode)
         {
-            //printf("nop\n");
-            goto handle_load_delay;
-        }
-
-        switch (instr.r_type.opcode)
-        {
-        case 0x00:
-        {
-            switch (instr.r_type.func)
-            {
-            case 0x00:
-                sll(instr);
-                break;
-            case 0x02:
-                srl(instr);
-                break;
-            case 0x03:
-                sra(instr);
-                break;
-            case 0x04:
-                sllv(instr);
-                break;
-            case 0x06:
-                srlv(instr);
-                break;
-            case 0x08:
-                jr(instr);
-                break;
-            case 0x09:
-                jalr(instr);
-                break;
-            case 0x0C:
-                syscall(instr);
-                break;
-            case 0x10:
-                mfhi(instr);
-                break;
-            case 0x11:
-                mthi(instr);
-                break;
-            case 0x12:
-                mflo(instr);
-                break;
-            case 0x13:
-                mtlo(instr);
-                break;
-            case 0x18:
-                mult(instr);
-                break;
-            case 0x19:
-                multu(instr);
-                break;
-            case 0x1B:
-                divu(instr);
-                break;
-            case 0x20:
-                add(instr);
-                break;
-            case 0x21:
-                addu(instr);
-                break;
-            case 0x23:
-                subu(instr);
-                break;
-            case 0x24:
-                op_and(instr);
-                break;
-            case 0x25:
-                op_or(instr);
-                break;
-            case 0x26:
-                op_xor(instr);
-                break;
-            case 0x27:
-                op_nor(instr);
-                break;
-            case 0x2A:
-                slt(instr);
-                break;
-            case 0x2B:
-                sltu(instr);
-                break;
-            default:
-                printf("[emu/IOP]: %s: Unknown special 0x%08x (0x%02x)\n", __FUNCTION__, instr.full, instr.r_type.func);
-                Application::Exit(1);
-            }
-        }
-        break;
-        case 0x01:
-            bcond(instr);
-            break;
-        case 0x02:
-            j(instr);
-            break;
-        case 0x03:
-            jal(instr);
-            break;
-        case 0x04:
-            beq(instr);
-            break;
-        case 0x05:
-            bne(instr);
-            break;
-        case 0x06:
-            blez(instr);
-            break;
-        case 0x07:
-            bgtz(instr);
-            break;
-        case 0x08:
-            addi(instr);
-            break;
-        case 0x09:
-            addiu(instr);
-            break;
-        case 0x0A:
-            slti(instr);
-            break;
-        case 0x0B:
-            sltiu(instr);
-            break;
-        case 0x0C:
-            andi(instr);
-            break;
-        case 0x0D:
-            ori(instr);
-            break;
-        case 0x0F:
-            lui(instr);
-            break;
-        case 0x10:
-            cop0(instr);
-            break;
-        case 0x20:
-            lb(instr);
-            break;
-        case 0x21:
-            lh(instr);
-            break;
-        case 0x23:
-            lw(instr);
-            break;
-        case 0x24:
-            lbu(instr);
-            break;
-        case 0x25:
-            lhu(instr);
-            break;
-        case 0x28:
-            sb(instr);
-            break;
-        case 0x29:
-            sh(instr);
-            break;
-        case 0x2B:
-            sw(instr);
-            break;
+        case 0b000000: op_special(); break;
+        case 0b000001: op_bcond(); break;
+        case 0b001111: op_lui(); break;
+        case 0b001101: op_ori(); break;
+        case 0b101011: op_sw(); break;
+        case 0b001001: op_addiu(); break;
+        case 0b001000: op_addi(); break;
+        case 0b000010: op_j(); break;
+        case 0b010000: op_cop0(); break;
+        case 0b100011: op_lw(); break;
+        case 0b000101: op_bne(); break;
+        case 0b101001: op_sh(); break;
+        case 0b000011: op_jal(); break;
+        case 0b001100: op_andi(); break;
+        case 0b101000: op_sb(); break;
+        case 0b100000: op_lb(); break;
+        case 0b000100: op_beq(); break;
+        case 0b000111: op_bgtz(); break;
+        case 0b000110: op_blez(); break;
+        case 0b100100: op_lbu(); break;
+        case 0b001010: op_slti(); break;
+        case 0b001011: op_sltiu(); break;
+        case 0b100101: op_lhu(); break;
+        case 0b100001: op_lh(); break;
         default:
-            printf("[emu/IOP]: %s: Unknown instruction 0x%08x (0x%02x)\n", __FUNCTION__, instr.full, instr.r_type.opcode);
-            Application::Exit(1);
+			printf("Unknown instruction 0x%02x\n", i.opcode);
+			exit(1);
         }
 
-handle_load_delay:
-        regs[load_delay.reg] = load_delay.data;
-        load_delay = next_load_delay;
-        next_load_delay.reg = 0;
-
-        regs[write_back.reg] = write_back.data;
-        write_back.reg = 0;
-        regs[0] = 0;
-
-        if (singleStep)
-            Dump();
+        /* Apply pending load delays. */
+        handle_load_delay();
     }
 
     if (IntPending())
@@ -210,12 +114,6 @@ handle_load_delay:
         printf("Found interrupt, might want to handle that\n");
         exit(1);
     }
-}
-
-void IoProcessor::AdvancePC()
-{
-    pc = next_pc;
-    next_pc += 4;
 }
 
 void IoProcessor::Dump()

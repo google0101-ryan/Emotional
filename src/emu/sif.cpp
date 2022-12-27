@@ -1,13 +1,19 @@
 #include <emu/sif.h>
 #include <app/Application.h>
 
+constexpr const char* REGS[] =
+{
+	"SIF_MSCOM", "SIF_SMCOM", "SIF_MSFLG",
+	"SIF_SMFLG", "SIF_CTRL", "", "SIF_BD6"
+};
+
 void SubsystemInterface::write(uint32_t addr, uint32_t data)
 {
     auto comp = (addr >> 9) & 0x1;
     uint16_t offset = (addr >> 4) & 0xF;
     auto ptr = (uint32_t*)&regs + offset;
 
-    printf("[emu/Sif%s]: Writing 0x%08x to 0x%08x\n", comp ? "EE" : "Iop", data, addr);
+    printf("[emu/Sif%s]: Writing 0x%08x to %s\n", comp ? "EE" : "Iop", data, REGS[offset]);
 
     if (offset == 4)
     {
@@ -46,8 +52,8 @@ uint32_t SubsystemInterface::read(uint32_t addr)
     uint16_t offset = (addr >> 4) & 0xF;
     auto ptr = (uint32_t*)&regs + offset;
 
-    if (addr != 0x1d000020)
-        printf("[emu/Sif%s]: Reading 0x%08x from 0x%08x\n", comp ? "EE" : "Iop", *ptr, addr);
+    if (addr != 0x1d000020 && !comp)
+        printf("[emu/Sif%s]: Reading 0x%08x from %s\n", comp ? "EE" : "Iop", *ptr, REGS[offset]);
 
     return *ptr;
 }

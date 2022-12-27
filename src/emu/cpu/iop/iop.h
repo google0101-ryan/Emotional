@@ -8,7 +8,7 @@ class Bus;
 class IoProcessor
 {
 private:
-    uint32_t pc, next_pc;
+    uint32_t pc;
     uint32_t regs[32];
     uint32_t hi, lo;
 
@@ -154,9 +154,9 @@ private:
 
     struct LoadDelay
     {
-        int reg;
-        uint32_t data;
-    } load_delay, next_load_delay, write_back;
+        int reg = 0;
+        uint32_t data = 0;
+	} write_back, memory_load, delayed_memory_load;
 
     bool singleStep = false;
 
@@ -166,65 +166,71 @@ private:
         write_back.data = value;
     }
 
-    void bcond(Opcode i); // 0x01
-    void j(Opcode i); // 0x02
-    void jal(Opcode i); // 0x03
-    void beq(Opcode i); // 0x04
-    void bne(Opcode i); // 0x05
-    void blez(Opcode i); // 0x06
-    void bgtz(Opcode i); // 0x07
-    void addi(Opcode i); // 0x08
-    void addiu(Opcode i); // 0x09
-    void slti(Opcode i); // 0x0A
-    void sltiu(Opcode i); // 0x0B
-    void andi(Opcode i); // 0x0C
-    void ori(Opcode i); // 0x0D
-    void lui(Opcode i); // 0x0F
-    void cop0(Opcode i); // 0x10
-    void lb(Opcode i); // 0x20
-    void lh(Opcode i); // 0x21
-    void lw(Opcode i); // 0x23
-    void lbu(Opcode i); // 0x24
-    void lhu(Opcode i); // 0x25
-    void sb(Opcode i); // 0x28
-    void sh(Opcode i); // 0x29
-    void sw(Opcode i); // 0x2B
+	void op_special(); // 0x00
+    void op_bcond(); // 0x01
+    void op_j(); // 0x02
+    void op_jal(); // 0x03
+    void op_beq(); // 0x04
+    void op_bne(); // 0x05
+    void op_blez(); // 0x06
+    void op_bgtz(); // 0x07
+    void op_addi(); // 0x08
+    void op_addiu(); // 0x09
+    void op_slti(); // 0x0A
+    void op_sltiu(); // 0x0B
+    void op_andi(); // 0x0C
+    void op_ori(); // 0x0D
+    void op_lui(); // 0x0F
+    void op_cop0(); // 0x10
+    void op_lb(); // 0x20
+    void op_lh(); // 0x21
+    void op_lw(); // 0x23
+    void op_lbu(); // 0x24
+    void op_lhu(); // 0x25
+    void op_sb(); // 0x28
+    void op_sh(); // 0x29
+    void op_sw(); // 0x2B
 
     // special
 
-    void sll(Opcode i); // 0x00
-    void srl(Opcode i); // 0x02
-    void sra(Opcode i); // 0x03
-    void sllv(Opcode i); // 0x04
-    void srlv(Opcode i); // 0x06
-    void jr(Opcode i); // 0x08
-    void jalr(Opcode i); // 0x09
-    void syscall(Opcode i); // 0x0C
-    void mfhi(Opcode i); // 0x10
-    void mthi(Opcode i); // 0x11
-    void mflo(Opcode i); // 0x12
-    void mtlo(Opcode i); // 0x13
-    void mult(Opcode i); // 0x18
-    void multu(Opcode i); // 0x19
-    void divu(Opcode i); // 0x1B
-    void add(Opcode i); // 0x20
-    void addu(Opcode i); // 0x21
-    void subu(Opcode i); // 0x23
-    void op_and(Opcode i); // 0x24
-    void op_or(Opcode i); // 0x25
-    void op_xor(Opcode i); // 0x26
-    void op_nor(Opcode i); // 0x27
-    void slt(Opcode i); // 0x2A
-    void sltu(Opcode i); // 0x2B
+    void op_sll(); // 0x00
+    void op_srl(); // 0x02
+    void op_sra(); // 0x03
+    void op_sllv(); // 0x04
+    void op_srlv(); // 0x06
+    void op_jr(); // 0x08
+    void op_jalr(); // 0x09
+    void op_syscall(); // 0x0C
+    void op_mfhi(); // 0x10
+    void op_mthi(); // 0x11
+    void op_mflo(); // 0x12
+    void op_mtlo(); // 0x13
+    void op_mult(); // 0x18
+    void op_multu(); // 0x19
+    void op_divu(); // 0x1B
+    void op_add(); // 0x20
+    void op_addu(); // 0x21
+    void op_subu(); // 0x23
+    void op_and(); // 0x24
+    void op_or(); // 0x25
+    void op_xor(); // 0x26
+    void op_nor(); // 0x27
+    void op_slt(); // 0x2A
+    void op_sltu(); // 0x2B
 
     // cop0
 
-    void mfc0(Opcode i); // 0x00
-    void mtc0(Opcode i); // 0x04
+    void op_mfc0(); // 0x00
+    void op_mtc0(); // 0x04
 
-    void AdvancePC();
+	void direct_jump();
+	void handle_load_delay();
+	void branch();
+	void load(uint32_t regN, uint32_t value);
 
-    bool isCacheIsolated() {return Cop0.regs[12] & (1 << 16);}
+    bool isCacheIsolated() {return Cop0.status.IsC;}
+
+	Opcode i, next_instr;
 public:
     IoProcessor(Bus* bus);
 

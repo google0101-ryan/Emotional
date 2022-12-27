@@ -60,14 +60,12 @@ void EmotionDma::write(uint32_t addr, uint32_t data)
 		data &= 0x01fffff0;
 	
 	*ptr = data;
+	printf("[emu/Dmac]: Write 0x%08x to %s (0x%08x) of channel %d\n", data, REGS[reg], addr, chan);
 
 	if (channels[chan].control.running)
 	{
 		printf("Started transfer on channel %d\n", chan);
 	}
-
-	
-	printf("[emu/Dmac]: Write 0x%08x to %s (0x%08x) of channel %d\n", data, REGS[reg], addr, chan);
 }
 
 void EmotionDma::write_dma(uint32_t addr, uint32_t data)
@@ -82,6 +80,8 @@ void EmotionDma::write_dma(uint32_t addr, uint32_t data)
 	}
 	else
 		*ptr = data;
+
+	printf("[emu/DMAC]: Writing 0x%08x to %s\n", data, GLOBALS[offset]);
 }
 
 uint32_t EmotionDma::read_dma(uint32_t addr)
@@ -89,6 +89,8 @@ uint32_t EmotionDma::read_dma(uint32_t addr)
     uint32_t offset = (addr >> 4) & 0xf;
 	auto ptr = (uint32_t*)&globals + offset;
 	
+	printf("[emu/DMAC]: Reading %s\n", GLOBALS[offset]);
+
 	return *ptr;
 }
 
@@ -104,37 +106,98 @@ void EmotionDma::tick(int cycles)
 			auto& channel = channels[id];
 			if (channel.control.running)
 			{
-				switch (id)
+				if (channel.qword_count > 0)
 				{
-				case CHANNELS::SIF0:
-				{
-					auto sif = bus->GetSif();
-					if (sif->fifo0.size() >= 4)
+					switch (id)
 					{
-						uint32_t data[4];
-						for (int i = 0; i < 4; i++)
+					case CHANNELS::SIF0:
+					{
+						auto sif = bus->GetSif();
+						if (sif->fifo0.size() >= 4)
 						{
-							data[i] = sif->fifo0.front();
-							sif->fifo0.pop();
+							uint32_t data[4];
+							for (int i = 0; i < 4; i++)
+							{
+								data[i] = sif->fifo0.front();
+								sif->fifo0.pop();
+							}
+
+							uint128_t qword = *(uint128_t*)data;
+							uint64_t upper = qword.u64[1];
+							uint64_t lower = qword.u64[0];
+							printf("[emu/DMAC]: SIF0: 0x%x%016x\n", upper, lower);
+
+							bus->write<__uint128_t>(channel.address, qword.u128);
+
+							channel.qword_count--;
+							channel.address += 16;
 						}
-
-						__uint128_t qword = *(__uint128_t*)data;
-						uint64_t upper = qword >> 64, lower = qword;
-						printf("[emu/IoDma]: Receiving packet from SIF0 0x%lx%016lx\n", upper, lower);
-
-						bus->write<__uint128_t>(channel.address, qword);
-
-						channel.qword_count--;
-						channel.address += 16;
+						break;
 					}
-					break;
+					default:
+						printf("Unknown channel with qword > 0 %d\n", id);
+						exit(1);
+					}
 				}
-				default:
-					printf("Unknown channel %d (0x%04x)\n", id, channel.qword_count);
-					exit(1);
+				else if (channel.end_transfer)
+				{
+					printf("[emu/DMAC]: End transfer on channel %d\n", id);
+
+					channel.end_transfer = false;
+					channel.control.running = 0;
+
+					globals.d_stat.channel_irq |= (1 << id);
+
+					if (globals.d_stat.channel_irq & globals.d_stat.channel_irq_mask)
+					{
+						printf("\n[emu/DMAC]: INT1\n");
+						exit(1);
+					}
+				}
+				else
+				{
+					fetch_tag(id);
 				}
 			}
 		}
+	}
+}
+
+void EmotionDma::fetch_tag(int id)
+{
+	DMATag tag;
+	auto& channel = channels[id];
+
+	switch (id)
+	{
+	case CHANNELS::SIF0:
+	{
+		auto sif = bus->GetSif();
+		if (sif->fifo0.size() >= 2)
+		{
+			uint32_t data[2] = {};
+			for (int i = 0; i < 2; i++)
+			{
+				data[i] = sif->fifo0.front();
+				sif->fifo0.pop();
+			}
+
+			tag.value = *(uint64_t*)data;
+			printf("Read SIF0 DMA tag 0x%lx\n", (uint64_t)tag.value);
+
+			channel.qword_count = tag.qwords;
+			channel.control.tag = (tag.value >> 16) & 0xffff;
+			channel.address = tag.address;
+			channel.tag_address.address += 16;
+
+			if (channel.control.enable_irq_bit && tag.irq)
+				channel.end_transfer = true;
+		}
+		break;
+	}
+	default:
+		printf("Unknown channel tag fetch %d\n", id);
+		exit(1);
 	}
 }
 
@@ -144,6 +207,8 @@ uint32_t EmotionDma::read(uint32_t addr)
 	uint32_t channel = get_channel(id);
 	uint32_t offset = (addr >> 4) & 0xf;
 	auto ptr = (uint32_t*)&channels[channel] + offset;
+
+	printf("[emu/DMAC]: Reading %s from channel %d\n", REGS[offset], channel);
 
 	return *ptr;
 }

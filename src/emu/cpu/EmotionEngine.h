@@ -25,6 +25,7 @@ private:
         next_instr = {};
         next_instr.full = bus->read<uint32_t>(pc);
         next_instr.pc = pc;
+		next_instr.is_delay_slot = false;
         pc += 4;
     }
 
@@ -33,16 +34,73 @@ private:
         union
         {
             float f[32] = {0.0f};
-            uint32_t i[32];
-        } regs;
+            uint32_t u[32];
+			int32_t s[32];
+        } regs = {{0.0f}};
 
         union
         {
             float f;
             uint32_t u;
-            int32_t i;
-        } accumulator;
+            int32_t s;
+        } accumulator = {0.f};
+
+		struct COP1_CONTROL
+		{
+			bool su;
+			bool so;
+			bool sd;
+			bool si;
+			bool u;
+			bool o;
+			bool d;
+			bool i;
+			bool condition;
+		} control = {false, false, false, 
+					false, false, false, 
+					false, false, false};
     } cop1;
+
+	void check_overflow_cop1(uint32_t& dest, bool set_flags)
+	{
+		if ((dest & ~0x80000000) == 0x7F800000)
+		{
+			printf("[FPU] Overflow Dest = %x\n", dest);
+			dest = (dest & 0x80000000) | 0x7F7FFFFF;
+
+			if (set_flags)
+			{
+				cop1.control.so = true;
+				cop1.control.o = true;
+			}
+		}
+		else
+		{
+			if (set_flags)
+				cop1.control.o = false;
+		}
+	}
+
+	void check_underflow_cop1(uint32_t& dest, bool set_flags)
+	{
+		auto& control = cop1.control;
+		if ((dest & 0x7F800000) == 0 && (dest & 0x7FFFFF) != 0)
+		{
+			printf("[FPU] Underflow Dest = %x\n", dest);
+			dest &= 0x80000000;
+			
+			if (set_flags)
+			{
+				control.su = true;
+				control.u = true;
+			}
+		}
+		else
+		{
+			if (set_flags)
+				control.u = false;
+		}
+	}
 
     struct CacheTag
     {
@@ -53,6 +111,7 @@ private:
     };
 
     bool singleStep = false;
+	bool can_disassemble = false;
 
     void j(Opcode i); // 0x02
     void jal(Opcode i); // 0x03
@@ -69,6 +128,9 @@ private:
     void lui(Opcode i); // 0x0F
     void mfc0(Opcode i); // 0x10 0x00
     void mtc0(Opcode i); // 0x10 0x04
+	void eret(Opcode i); // 0x10 0x10 0x18
+	void ei(Opcode i); // 0x10 0x10 0x38
+	void di(Opcode i); // 0x10 0x10 0x39
     void beql(Opcode i); // 0x14
     void bnel(Opcode i); // 0x15
     void daddiu(Opcode i); // 0x19
@@ -100,7 +162,8 @@ private:
     void jr(Opcode i); // 0x08
     void jalr(Opcode i); // 0x09
     void movz(Opcode i); // 0x0a
-    void movn(Opcode i); // 0x0B
+    void movn(Opcode i); // 0x0b
+	void syscall(Opcode i); // 0x0c
     void mfhi(Opcode i); // 0x10
     void mflo(Opcode i); // 0x12
     void dsllv(Opcode i); // 0x14
@@ -126,12 +189,19 @@ private:
 
     void bltz(Opcode i); // 0x00
     void bgez(Opcode i); // 0x01
+    void bltzl(Opcode i); // 0x02
+    void bgezl(Opcode i); // 0x03
+    void bgezal(Opcode i); // 0x11
+    void bgezall(Opcode i); // 0x13
 
     // mmi
 
     void mflo1(Opcode i); // 0x12
     void mult1(Opcode i); // 0x18
     void divu1(Opcode i); // 0x1b
+
+	// mmi1
+	void padduw(Opcode i);
 
     // mmi3
 
@@ -141,9 +211,19 @@ private:
 
     void mfc1(Opcode i);
     void mtc1(Opcode i);
+	void ctc1(Opcode i);
+
+	// cop1.bc1
+	void bc(Opcode i);
 
     // cop1.w
     void adda(Opcode i);
+
+	// cop2
+	void qmfc2(Opcode i);
+	void qmtc2(Opcode i);
+	void cfc2(Opcode i);
+	void ctc2(Opcode i);
 
     const char* Reg(int index)
     {
@@ -219,6 +299,8 @@ private:
     }
 
 	bool branch_taken = false;
+
+	void exception(int type, bool log);
 public:
     EmotionEngine(Bus* bus, VectorUnit* vu0);
 

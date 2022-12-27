@@ -120,6 +120,8 @@ private:
 	DMACGlobals globals = {};
 
     Bus* bus;
+
+	void fetch_tag(int id);
 public:
     EmotionDma(Bus* bus);
 

@@ -89,13 +89,13 @@ public:
     {
         addr = Translate(addr);
         
-        if (addr >= 0x1FC00000 && addr < 0x21C00000)
+        if (addr >= 0x1FC00000 && addr < 0x20000000)
             return *(T*)&bios[addr - 0x1FC00000];
         if (addr >= 0x70000000 && addr < 0x70004000)
             return *(T*)&scratchpad[addr - 0x70000000];   
         if (addr < 0x2000000)
             return *(T*)&ram[addr];
-        if (addr >= 0x1c000000 && addr < 0x1e000000)
+        if (addr >= 0x1c000000 && addr < 0x1c400000)
             return *(T*)&iop_ram[addr - 0x1c000000];
         else if (addr >= 0x10003000 && addr <= 0x10006000)
             return (T)gif->read32(addr);
@@ -242,7 +242,7 @@ public:
             sif->write(addr, data);
             return;
         }
-        else if (addr >= 0x1C000000 && addr <= 0x1C200000)
+        else if (addr >= 0x1C000000 && addr < 0x1C400000)
         {
             *(T*)&iop_ram[addr - 0x1C000000] = data;
             return;
