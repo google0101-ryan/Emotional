@@ -52,8 +52,8 @@ uint32_t SubsystemInterface::read(uint32_t addr)
     uint16_t offset = (addr >> 4) & 0xF;
     auto ptr = (uint32_t*)&regs + offset;
 
-    if (addr != 0x1d000020 && !comp)
-        printf("[emu/Sif%s]: Reading 0x%08x from %s\n", comp ? "EE" : "Iop", *ptr, REGS[offset]);
+    if (!comp && addr != 0x1D000020)
+		printf("[emu/Sif%s]: Reading 0x%08x from %s\n", comp ? "EE" : "Iop", *ptr, REGS[offset]);
 
     return *ptr;
 }

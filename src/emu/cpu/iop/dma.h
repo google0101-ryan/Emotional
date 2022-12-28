@@ -132,6 +132,8 @@ private:
 
     IopBus* bus;
 	Bus* parent;
+
+	void fetch_tag(uint32_t id);
 public:
     IoDma(IopBus* bus, Bus* ee_bus)
     : bus(bus), parent(ee_bus) {}

@@ -3,8 +3,54 @@
 #include <app/Application.h>
 #include "iop.h"
 
+
+uint32_t exception_addr[2] = { 0x80000080, 0xBFC00180 };
+
+void IoProcessor::exception(Exception cause, uint32_t cop)
+{
+	printf("[IOP] Exception of type %d\n", (int)cause);
+
+	uint32_t mode = Cop0.status.value;
+	Cop0.status.value &= ~(uint32_t)0x3F;
+	Cop0.status.value |= (mode << 2) & 0x3F;
+
+	Cop0.cause.excode = (uint32_t)cause;
+	Cop0.cause.CE = cop;
+
+	bool is_delay_slot = i.is_delay_slot;
+	bool branch_taken = i.branch_taken;
+	if (cause == Exception::Interrupt)
+	{
+		Cop0.epc = next_instr.pc;
+
+		is_delay_slot = next_instr.is_delay_slot;
+		branch_taken = next_instr.branch_taken;
+	}
+	else
+	{
+		Cop0.epc = i.pc;
+	}
+
+	if (is_delay_slot)
+	{
+		Cop0.epc -= 4;
+
+		Cop0.cause.BD = true;
+		Cop0.TAR = next_instr.pc;
+
+		if (branch_taken)
+		{
+			Cop0.cause.BT = true;
+		}
+	}
+
+	pc = exception_addr[Cop0.status.BEV];
+
+	direct_jump();
+}
+
 IoProcessor::IoProcessor(Bus *bus)
-    : bus(bus)
+	: bus(bus)
 {
     memset(regs, 0, sizeof(regs));
     Cop0 = {};
@@ -59,18 +105,24 @@ void IoProcessor::Clock(int cycles)
     for (int cycle = cycles; cycle > 0; cycle--)
     {
         if (singleStep)
-        getc(stdin);
+		{
+        	getc(stdin);
+		}
         
 		i = next_instr;
 
         if (i.pc == 0x12C48 || i.pc == 0x1420C || i.pc == 0x1430C)
-        bus->IopPrint(regs[5], regs[6]);
+		{
+        	bus->IopPrint(regs[5], regs[6]);
+		}
 		
 		if (pc & 0x3)
 		{
 			printf("Error: Unaligned address at 0x%08x\n", pc);
 			exit(1);
 		}
+
+		if ((pc & 0xFFFFFF00) == 0xbc00) can_disassemble = true;
 
 		direct_jump();
 
@@ -101,7 +153,7 @@ void IoProcessor::Clock(int cycles)
         case 0b100101: op_lhu(); break;
         case 0b100001: op_lh(); break;
         default:
-			printf("Unknown instruction 0x%02x\n", i.opcode);
+			printf("[emu/IOP]Unknown instruction 0x%02x\n", i.opcode);
 			exit(1);
         }
 
@@ -111,8 +163,7 @@ void IoProcessor::Clock(int cycles)
 
     if (IntPending())
     {
-        printf("Found interrupt, might want to handle that\n");
-        exit(1);
+		exception(Exception::Interrupt);
     }
 }
 
@@ -126,9 +177,10 @@ void IoProcessor::Dump()
 bool IoProcessor::IntPending()
 {
     IopBus* iopBus = bus->GetBus();
-    bool pending = iopBus->GetICtrl() && (iopBus->GetIStat() & iopBus->GetIMask());
-    Cop0.cause.IP = (Cop0.cause.IP & ~0x4) | (pending << 2);
+	
+	bool pending = iopBus->GetICtrl() && (iopBus->GetIStat() & iopBus->GetIMask());
+	Cop0.cause.IP = (Cop0.cause.IP & ~0x4) | (pending << 2);
 
-    bool enabled = Cop0.status.IEc && (Cop0.status.Im & Cop0.cause.IP);
-    return pending && enabled;
+	bool enabled = Cop0.status.IEc && (Cop0.status.Im & Cop0.cause.IP);
+	return pending && enabled;
 }

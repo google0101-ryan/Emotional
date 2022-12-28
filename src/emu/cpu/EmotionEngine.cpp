@@ -2,31 +2,11 @@
 #include "util/uint128.h"
 #include <bits/stdint-uintn.h>
 #include <cstring>
+#include <map>
 #include <emu/cpu/EmotionEngine.h>
 #include <emu/cpu/opcode.h>
 #include <assert.h>
 #include "EmotionEngine.h"
-
-union COP0Cause
-{
-    uint32_t value;
-    struct
-    {
-        uint32_t : 2;
-        uint32_t exccode : 5;
-        uint32_t : 3;
-        uint32_t ip0_pending : 1;
-        uint32_t ip1_pending : 1;
-        uint32_t siop : 1;
-        uint32_t : 2;
-        uint32_t timer_ip_pending : 1;
-        uint32_t exc2 : 3;
-        uint32_t : 9;
-        uint32_t ce : 2;
-        uint32_t bd2 : 1;
-        uint32_t bd : 1;
-    };
-};
 
 void EmotionEngine::exception(int type, bool log)
 {
@@ -38,23 +18,21 @@ void EmotionEngine::exception(int type, bool log)
 	}
 
 	COP0Cause cause;
-	cause.value = cop0_regs[13];
-	uint32_t status = cop0_regs[12];
-	bool edi = (status >> 17) & 1;
-	bool exl = (status >> 1) & 1;
-	bool erl = (status >> 2) & 1;
-	int ksu = (status >> 3) & 2;
+	cause.value = cop0.cop0_regs[13];
+	COP0Status status;
+	status.value = cop0.cop0_regs[12];
 
 	uint32_t vector = 0x180;
 	cause.exccode = type;
-	if (!exl)
+	if (!status.exl)
 	{
-		cop0_regs[14] = instr.pc - 4 * instr.is_delay_slot;
+		cop0.cop0_regs[14] = instr.pc - 4 * instr.is_delay_slot;
 		cause.bd = instr.is_delay_slot;
 
 		switch (type)
 		{
 		case 0:
+			//can_disassemble = true;
 			vector = 0x200;
 			break;
 		default:
@@ -62,29 +40,115 @@ void EmotionEngine::exception(int type, bool log)
 			break;
 		}
 
-		cop0_regs[12] |= (1 << 1);
+		status.exl = true;
 	}
 
-	pc = exception_addr[status & (1 << 22)] + vector;
+	pc = exception_addr[status.bev] + vector;
 
-	cop0_regs[13] = cause.value;
+	cop0.cop0_regs[13] = cause.value;
+	cop0.cop0_regs[12] = status.value;
 
 	fetch_next();
+
+	tlb_map = cop0.get_vtlb_map();
+}
+
+void EmotionEngine::HandleSifSetDma()
+{
+	struct SifDmaTransfer
+	{
+		uint32_t source;
+		uint32_t dest;
+		int size;
+		int attr;
+	};
+
+	typedef struct t_SifCmdHeader
+	{
+		/** Packet size. Min: 1x16 (header only), max: 7*16 */
+		uint32_t psize : 8;
+		/** Payload size */
+		uint32_t dsize : 24;
+		/** Destination address for payload. Can be NULL if there is no payload. */
+		uint32_t dest;
+		/** Function number of function to call. */
+		int cid;
+		/** Can be freely used. */
+		uint32_t opt;
+	} SifCmdHeader_t;
+
+	struct SifRpcBindPkt
+	{
+		SifCmdHeader_t sifcmd;
+		int rec_id;
+		uint32_t pkt_addr;
+		int rpc_id;
+		uint32_t client;
+		uint32_t sid;
+	};
+
+	uint32_t addr = Bus::Translate(regs[4].u32[0]);
+	
+	SifDmaTransfer* dmat = (SifDmaTransfer*)&bus->grab_ee_ram()[addr];
+	addr = Bus::Translate(dmat->source);
+	SifCmdHeader_t* pkt = (SifCmdHeader_t*)&bus->grab_ee_ram()[addr];
+	SifRpcBindPkt* bind = (SifRpcBindPkt*)pkt;
+
+	std::map<uint32_t, std::string> servers =
+	{
+		{0x80000001, "FILEIO"},
+		{0x80000003, "IOP Heap Allocation"},
+		{0x80000006, "LOADFILE"},
+		{0x80000100, "PADMAN"},
+		{0x80000101, "PADMAN"},
+		{0x80000400, "MCSERV"},
+		{0x80000592, "CDVDFSV Init"},
+		{0x80000593, "CDVDFSV S command"},
+		{0x80000595, "CDVDFSV N command"},
+		{0x80000597, "CDVDFSV Search file"},
+		{0x8000059A, "CDVDFSV Disk Ready"},
+	};
+
+	if (pkt->cid == 0x80000009)
+	{
+		printf("Binding RPC server %s\n", servers[bind->sid].c_str());
+	}
 }
 
 EmotionEngine::EmotionEngine(Bus *bus, VectorUnit *vu0)
 	: bus(bus),
-	  vu0(vu0)
+	  vu0(vu0),
+	  cop0(bus->grab_ee_ram(), bus->grab_ee_bios(), bus->grab_ee_spr())
 {
     memset(regs, 0, sizeof(regs));
     pc = 0xBFC00000;
+
+	cop0.init_tlb();
+	tlb_map = cop0.get_vtlb_map();
     
     next_instr = {};
     next_instr.full = bus->read<uint32_t>(pc);
     next_instr.pc = pc;
 	pc += 4;
 
-    cop0_regs[15] = 0x2E20;
+    cop0.cop0_regs[15] = 0x2E20;
+
+	bus->AttachCPU(this);
+}
+
+bool EmotionEngine::int_pending()
+{
+	COP0Cause cause;
+	cause.value = cop0.cop0_regs[13];
+
+    COP0Status status;
+	status.value = cop0.cop0_regs[12];
+
+	bool int_enabled = status.eie && status.ie && !status.erl && !status.exl;
+
+	bool pending = (cause.ip0_pending && status.im0) || (cause.ip1_pending && status.im1) || (cause.timer_ip_pending && status.im7);
+
+	return int_enabled && pending;
 }
 
 void EmotionEngine::Clock(int cycles)
@@ -109,7 +173,7 @@ void EmotionEngine::Clock(int cycles)
 		}
 
 		if (can_disassemble)
-			printf("0x%08x: ", instr.full);
+			printf("0x%08x (0x%08x): ", instr.full, instr.pc);
 
         switch (instr.r_type.opcode)
         {
@@ -157,8 +221,14 @@ void EmotionEngine::Clock(int cycles)
 			case 0x10:
 				mfhi(instr);
 				break;
+			case 0x11:
+				mthi(instr);
+				break;
 			case 0x12:
 				mflo(instr);
+				break;
+			case 0x13:
+				mtlo(instr);
 				break;
 			case 0x14:
 				dsllv(instr);
@@ -190,6 +260,12 @@ void EmotionEngine::Clock(int cycles)
 			case 0x27:
 				op_nor(instr);
 				break;
+			case 0x28:
+				mfsa(instr);
+				break;
+			case 0x29:
+				mtsa(instr);
+				break;
 			case 0x2a:
 				slt(instr);
 				break;
@@ -198,6 +274,9 @@ void EmotionEngine::Clock(int cycles)
 				break;
 			case 0x2d:
 				daddu(instr);
+				break;
+			case 0x2f:
+				dsubu(instr);
 				break;
 			case 0x38:
 				dsll(instr);
@@ -296,9 +375,8 @@ void EmotionEngine::Clock(int cycles)
 			case 0x10:
 				switch (instr.r_type.func)
 				{
-				case 0x01:
 				case 0x02:
-				case 0x06:
+					tlbwi(instr);
 					break;
 				case 0x18:
 					eret(instr);
@@ -323,6 +401,9 @@ void EmotionEngine::Clock(int cycles)
 		{
 			switch (instr.r_type.rs)
 			{
+			case 0x02:
+				cfc1(instr);
+				break;
 			case 0x04:
 				mtc1(instr);
 				break;
@@ -380,8 +461,20 @@ void EmotionEngine::Clock(int cycles)
 		{
 			switch (instr.r_type.func)
 			{
+			case 0x04:
+				plzcw(instr);
+				break;
+			case 0x10:
+				mfhi1(instr);
+				break;
+			case 0x11:
+				mthi1(instr);
+				break;
 			case 0x12:
 				mflo1(instr);
+				break;
+			case 0x13:
+				mtlo1(instr);
 				break;
 			case 0x18:
 				mult1(instr);
@@ -465,6 +558,9 @@ void EmotionEngine::Clock(int cycles)
 			if (can_disassemble)
 				printf("cache\n");
 			break;
+		case 0x31:
+			lwc1(instr);
+			break;
 		case 0x37:
 			ld(instr);
 			break;
@@ -482,14 +578,16 @@ void EmotionEngine::Clock(int cycles)
         cycles_to_execute--;
     }
 	
-    cop0_regs[9] += cycles + std::abs(cycles_to_execute);
+    cop0.cop0_regs[9] += cycles + std::abs(cycles_to_execute);
 
     regs[0].u64[0] = regs[0].u64[1] = 0;
 
-	if (bus->read<uint32_t>(0x1000f000) & bus->read<uint32_t>(0x1000f010))
+	if (int_pending())
 	{
-		printf("Need to trigger interrupt here\n");
-		exit(1);
+		COP0Cause cause;
+		cause.value = cop0.cop0_regs[13];
+		printf("Servicing interrupt (0x%08x)\n", instr.pc);
+		exception(0, false);
 	}
 }
 
@@ -499,7 +597,7 @@ void EmotionEngine::Dump()
         printf("[emu/CPU]: %s: %s\t->\t%s\n", __FUNCTION__, Reg(i), print_128(regs[i]));
     for (int i = 0; i < 32; i++)
         printf("[emu/CPU]: %s: f%d\t->\t%0.2f\n", __FUNCTION__, i, cop1.regs.f[i]);
-    printf("[emu/CPU]: %s: pc\t->\t0x%08x\n", __FUNCTION__, pc-4);
+    printf("[emu/CPU]: %s: pc\t->\t0x%08x\n", __FUNCTION__, instr.pc);
     printf("[emu/CPU]: %s: hi\t->\t0x%08lx\n", __FUNCTION__, hi);
     printf("[emu/CPU]: %s: lo\t->\t0x%08lx\n", __FUNCTION__, lo);
     printf("[emu/CPU]: %s: hi1\t->\t0x%08lx\n", __FUNCTION__, hi1);

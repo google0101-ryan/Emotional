@@ -15,6 +15,7 @@ void Timer::tick(uint32_t cycles)
         timer.mode.compare_intr_raised = true;
         if (timer.mode.compare_intr && timer.mode.intr_enabled)
         {
+			printf("[emu/IopTimer]: Triggering compare interrupt\n");
             bus->TriggerInterrupt(16);
         }
         if (timer.mode.reset_on_intr)
@@ -27,6 +28,7 @@ void Timer::tick(uint32_t cycles)
         timer.mode.overflow_intr_raised = true;
         if (timer.mode.overflow_intr && timer.mode.intr_enabled)
         {
+			printf("[emu/IopTimer]: Triggering overflow interrupt\n");
             bus->TriggerInterrupt(16);
         }
         timer.counter -= 0xFFFFFFFF;

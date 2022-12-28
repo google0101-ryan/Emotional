@@ -13,6 +13,8 @@
 #include <emu/cpu/iop/iop.h>
 #include <emu/sif.h>
 
+class EmotionEngine;
+
 class Bus
 {
 private:
@@ -36,7 +38,9 @@ private:
     IopBus* iop_bus;
     IoProcessor* iop;
 
-    uint32_t Translate(uint32_t addr)
+	EmotionEngine* cpu;
+public:
+    static uint32_t Translate(uint32_t addr)
     {
         constexpr uint32_t KUSEG_MASKS[8] = 
         {
@@ -50,14 +54,20 @@ private:
             0xffffffff, 0x1fffffff,
         };
 
+		if (addr >= 0xFFFF8000)
+		{
+			return (addr - 0xFFFF8000) + 0x78000;
+		}
+
         addr &= KUSEG_MASKS[addr >> 29];
 
 		return addr;
     }
-public:
+
     Bus(std::string biosName, bool& success);
 
     void Clock();
+	void AttachCPU(EmotionEngine* ee) {this->cpu = ee;}
 
     void IopPrint(uint32_t pointer, uint32_t text_size)
     {
@@ -71,6 +81,8 @@ public:
     }
 
 	uint8_t* grab_ee_ram() {return ram;}
+	uint8_t* grab_ee_bios() {return bios;}
+	uint8_t* grab_ee_spr() {return scratchpad;}
 
     template<typename T>
     T read_iop(uint32_t addr)
@@ -111,6 +123,7 @@ public:
         switch (addr)
         {
         case 0x1000f000:
+			printf("[emu/INTC]: Reading from I_STAT\n");
             return intc_stat;
         case 0x1000f010:
             return intc_mask;
@@ -147,6 +160,8 @@ public:
         case 0x1f80141c:
         case 0x1f803800:
             return 0;
+		case 0x1000F520:
+			return ee_dmac->read_enabler();
         }
         
         printf("[emu/Bus]: %s: Failed to read from address 0x%08x\n", __FUNCTION__, addr);
@@ -156,6 +171,7 @@ public:
     template<typename T>
     void write(uint32_t addr, T data)
     {
+		uint32_t untranslated = addr;
         addr = Translate(addr);
 
         if (addr >= 0x70000000 && addr < 0x70004000)
@@ -296,11 +312,17 @@ public:
         case 0x1f801470:
         case 0x1f801472:
             return;
+		case 0x1000F590:
+			ee_dmac->write_enabler(data);
+			return;
         }
 
-        printf("[emu/Bus]: %s: Write %ld to unknown addr 0x%08x\n", __FUNCTION__, sizeof(T), addr);
+        printf("[emu/Bus]: %s: Write %ld to unknown addr 0x%08x (0x%08x)\n", __FUNCTION__, sizeof(T), addr, untranslated);
         exit(1);
     }
+
+	void TriggerDMAInterrupt();
+	void ClearDMAInterrupt();
 
     VectorUnit* GetVU0() {return vu0;}
     SubsystemInterface* GetSif() {return sif;}

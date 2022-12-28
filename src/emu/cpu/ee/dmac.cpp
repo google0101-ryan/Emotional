@@ -1,6 +1,7 @@
 #include <emu/cpu/ee/dmac.h>
 #include <app/Application.h>
 #include <emu/Bus.h>
+#include "dmac.h"
 
 inline uint32_t get_channel(uint32_t value)
 {
@@ -77,6 +78,11 @@ void EmotionDma::write_dma(uint32_t addr, uint32_t data)
 	{
 		globals.d_stat.clear &= ~(data & 0xffff);
 		globals.d_stat.reverse ^= (data >> 16);
+
+		if (globals.d_stat.channel_irq & globals.d_stat.channel_irq_mask)
+			bus->TriggerDMAInterrupt();
+		else
+			bus->ClearDMAInterrupt();
 	}
 	else
 		*ptr = data;
@@ -89,7 +95,7 @@ uint32_t EmotionDma::read_dma(uint32_t addr)
     uint32_t offset = (addr >> 4) & 0xf;
 	auto ptr = (uint32_t*)&globals + offset;
 	
-	printf("[emu/DMAC]: Reading %s\n", GLOBALS[offset]);
+	printf("[emu/DMAC]: Reading %s (0x%08x)\n", GLOBALS[offset], *ptr);
 
 	return *ptr;
 }
@@ -125,13 +131,32 @@ void EmotionDma::tick(int cycles)
 							uint128_t qword = *(uint128_t*)data;
 							uint64_t upper = qword.u64[1];
 							uint64_t lower = qword.u64[0];
-							printf("[emu/DMAC]: SIF0: 0x%x%016x\n", upper, lower);
+							printf("[emu/DMAC]: SIF0: 0x%lx%016lx\n", upper, lower);
 
 							bus->write<__uint128_t>(channel.address, qword.u128);
 
 							channel.qword_count--;
 							channel.address += 16;
 						}
+						break;
+					}
+					case CHANNELS::SIF1:
+					{
+						auto sif = bus->GetSif();
+
+						__uint128_t qword = *(__uint128_t*)&bus->grab_ee_ram()[channel.address];
+						uint32_t* data = (uint32_t*)&qword;
+						for (int i = 0; i < 4; i++)
+						{
+							sif->fifo1.push(data[i]);
+						}
+
+						uint64_t upper = qword >> 64, lower = qword;
+						printf("[DMAC][SIF1] Transfering to SIF1 FIFO 0x%lx%016lx\n", upper, lower);
+
+						channel.qword_count--;
+						channel.address += 16;
+
 						break;
 					}
 					default:
@@ -150,8 +175,8 @@ void EmotionDma::tick(int cycles)
 
 					if (globals.d_stat.channel_irq & globals.d_stat.channel_irq_mask)
 					{
-						printf("\n[emu/DMAC]: INT1\n");
-						exit(1);
+						printf("Triggering end-of-channel interrupt\n");
+						bus->TriggerDMAInterrupt();
 					}
 				}
 				else
@@ -162,6 +187,28 @@ void EmotionDma::tick(int cycles)
 		}
 	}
 }
+
+uint32_t EmotionDma::read_enabler()
+{
+	return globals.d_enable;
+}
+
+void EmotionDma::write_enabler(uint32_t data)
+{
+	globals.d_enable = data;
+}
+
+enum DMASourceID : uint32_t
+{
+	REFE,
+	CNT,
+	NEXT,
+	REF,
+	REFS,
+	CALL,
+	RET,
+	END
+};
 
 void EmotionDma::fetch_tag(int id)
 {
@@ -193,6 +240,46 @@ void EmotionDma::fetch_tag(int id)
 			if (channel.control.enable_irq_bit && tag.irq)
 				channel.end_transfer = true;
 		}
+		break;
+	}
+	case CHANNELS::SIF1:
+	{
+		auto address = channel.tag_address.address;
+
+		tag.value = *(__uint128_t*)&bus->grab_ee_ram()[address];
+		printf("[emu/DMAC]: Read SIF1 DMA tag 0x%08lx\n", (uint64_t)tag.value);
+
+		channel.qword_count = tag.qwords;
+		channel.control.tag = (tag.value >> 16) & 0xffff;
+
+		uint16_t tag_id = tag.id;
+		switch (tag_id)
+		{
+		case DMASourceID::REFE:
+			channel.address = tag.address;
+			channel.tag_address.value += 16;
+			channel.end_transfer = true;
+			break;
+		case DMASourceID::CNT:
+			channel.address = channel.tag_address.address + 16;
+			channel.tag_address.value = channel.address + channel.qword_count * 16;
+			break;
+		case DMASourceID::REF:
+			channel.address = tag.address;
+			channel.tag_address.value += 16;
+			break;
+		case DMASourceID::END:
+			channel.address = channel.tag_address.address + 16;
+			channel.end_transfer = true;
+			break;
+		default:
+			printf("\n[DMAC] Unrecognized SIF1 DMAtag id %d\n", tag_id);
+			exit(1);
+		}
+
+		if (channel.control.enable_irq_bit && tag.irq)
+			channel.end_transfer = true;
+
 		break;
 	}
 	default:

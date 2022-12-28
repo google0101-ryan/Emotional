@@ -127,6 +127,9 @@ public:
 
     void tick(int cycles);
 
+	uint32_t read_enabler();
+	void write_enabler(uint32_t data);
+
     void write(uint32_t addr, uint32_t data);
     void write_dma(uint32_t addr, uint32_t data);
 

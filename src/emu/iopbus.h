@@ -32,6 +32,8 @@ public:
     uint32_t GetICtrl() {return i_ctrl;}
     uint32_t GetIStat() {return i_stat;}
 
+	uint8_t* GetRam() {return ram;}
+
     IopBus(uint8_t* pBios, uint8_t* pRam, SubsystemInterface* sif, Bus* parent)
     : bios(pBios), ram(pRam), sif(sif)
     {
@@ -83,6 +85,8 @@ public:
         case 0x1f801450:
         case 0x1f801400:
             return 0;
+        case 0x1F801080 ... 0x1F8010EC:
+        case 0x1F801500 ... 0x1F80155C:
         case 0x1f8010f0:
         case 0x1f8010f4:
         case 0x1f801570:
@@ -181,6 +185,9 @@ public:
         case 0x1F801578:
             dma->write(addr, data);
             return;
+		case 0x1f801070:
+			i_stat &= data;
+			return;
         case 0x1f801074:
             i_mask = data;
             return;
@@ -188,6 +195,7 @@ public:
             i_ctrl = data;
             return;
         case 0x1D000010:
+        case 0x1D000020:
         case 0x1D000030:
         case 0x1D000040:
             sif->write(addr, data);

@@ -2,6 +2,8 @@
 #include <emu/Bus.h> // class Bus
 #include <fstream> // ifstrem
 #include <util/uint128.h>
+#include "Bus.h"
+#include <emu/cpu/EmotionEngine.h>
 
 Bus::Bus(std::string fileName, bool& s)
 {
@@ -58,6 +60,16 @@ void Bus::Clock()
     iop->Clock(4);
     iop_bus->GetIopTimers()->tick(4);
     iop_bus->GetIopDma()->tick(4);
+}
+
+void Bus::TriggerDMAInterrupt()
+{
+	cpu->SetINT1();
+}
+
+void Bus::ClearDMAInterrupt()
+{
+	cpu->ClearINT1();
 }
 
 void Bus::Dump()

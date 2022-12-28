@@ -25,7 +25,7 @@ void EmotionEngine::jal(Opcode i)
 
 	next_instr.is_delay_slot = true;
 	branch_taken = true;
-    if (can_disassemble) printf("jal 0x%08x (0x%08x)\n", pc, regs[31].u64[0]);
+    if (can_disassemble) printf("jal 0x%08x (0x%08lx)\n", pc, regs[31].u64[0]);
 }
 
 void EmotionEngine::beq(Opcode i)
@@ -43,7 +43,12 @@ void EmotionEngine::beq(Opcode i)
 
 	next_instr.is_delay_slot = true;
 
-    if (can_disassemble) printf("beq %s, %s, 0x%08x%s\n", Reg(rs), Reg(rt), instr.pc + offset, branch_taken ? " [taken]" : "");
+    if (can_disassemble) printf("beq %s, %s, 0x%08x%s\n", Reg(rs), Reg(rt), instr.pc + offset + 4, branch_taken ? " [taken]" : "");
+
+	if (pc == 0x800014ec)
+	{
+		exit(1);
+	}
 }
 
 void EmotionEngine::bne(Opcode i)
@@ -184,45 +189,54 @@ void EmotionEngine::lui(Opcode i)
 
 void EmotionEngine::mfc0(Opcode i)
 {
-    regs[i.r_type.rt].u64[0] = cop0_regs[i.r_type.rd];
+    regs[i.r_type.rt].u64[0] = cop0.cop0_regs[i.r_type.rd];
     if (can_disassemble) printf("mfc0 %s, r%d\n", Reg(i.r_type.rt), i.r_type.rd);
 }
 
 void EmotionEngine::mtc0(Opcode i)
 {
-    cop0_regs[i.r_type.rd] = regs[i.r_type.rt].u32[0];
-    if (can_disassemble) printf("mtc0 %s, r%d (0x%08x)\n", Reg(i.r_type.rt), i.r_type.rd, regs[i.r_type.rt].u32[0]);
+    cop0.cop0_regs[i.r_type.rd] = regs[i.r_type.rt].u32[0];
+	tlb_map = cop0.get_vtlb_map();
+    printf("mtc0 %s, r%d (0x%08x)\n", Reg(i.r_type.rt), i.r_type.rd, regs[i.r_type.rt].u32[0]);
 }
 
-void EmotionEngine::eret(Opcode i)
+void EmotionEngine::tlbwi(Opcode)
 {
-	uint32_t status = cop0_regs[12];
+	int index = cop0.cop0_regs[0];
+	cop0.set_tlb(index);
+	if (can_disassemble) printf("tlbwi\n");
+}
+
+void EmotionEngine::eret(Opcode)
+{
+	uint32_t status = cop0.cop0_regs[12];
 	bool erl = (status >> 2) & 1;
 
 	if (erl)
 	{
-		pc = cop0_regs[30];
-		cop0_regs[12] &= ~(1 << 2);
+		pc = cop0.cop0_regs[30];
+		cop0.cop0_regs[12] &= ~(1 << 2);
 	}
 	else
 	{
-		pc = cop0_regs[14];
-		cop0_regs[12] &= ~(1 << 1);
+		pc = cop0.cop0_regs[14];
+		cop0.cop0_regs[12] &= ~(1 << 1);
 	}
 
 	branch_taken = true;
 
 	if (can_disassemble)
-		printf("eret (0x%08x)\n", i.full, pc);
+		printf("eret (0x%08x)\n", pc);
 
-	//can_disassemble = true;
+	can_disassemble = false;
 
 	fetch_next();
+	tlb_map = cop0.get_vtlb_map();
 }
 
-void EmotionEngine::ei(Opcode i)
+void EmotionEngine::ei(Opcode)
 {
-	uint32_t status = cop0_regs[12];
+	uint32_t status = cop0.cop0_regs[12];
 	bool edi = (status >> 17) & 1;
 	bool exl = (status >> 1) & 1;
 	bool erl = (status >> 2) & 1;
@@ -230,15 +244,15 @@ void EmotionEngine::ei(Opcode i)
 
 	if (edi || exl || erl || !ksu)
 	{
-		cop0_regs[12] |= (1 << 16);
+		cop0.cop0_regs[12] |= (1 << 16);
 	}
 
 	if (can_disassemble) printf("ei\n");
 }
 
-void EmotionEngine::di(Opcode i)
+void EmotionEngine::di(Opcode)
 {
-	uint32_t status = cop0_regs[12];
+	uint32_t status = cop0.cop0_regs[12];
 	bool edi = (status >> 17) & 1;
 	bool exl = (status >> 1) & 1;
 	bool erl = (status >> 2) & 1;
@@ -246,7 +260,7 @@ void EmotionEngine::di(Opcode i)
 
 	if (edi || exl || erl || !ksu)
 	{
-		cop0_regs[12] &= ~(1 << 16);
+		cop0.cop0_regs[12] &= ~(1 << 16);
 	}
 
 	if (can_disassemble) printf("di\n");
@@ -355,9 +369,9 @@ void EmotionEngine::lq(Opcode i)
 
     uint32_t addr = regs[base].u32[0] + off;
 
-    regs[rt].u128 = bus->read<__uint128_t>(addr);
-
     if (can_disassemble) printf("lq %s, %d(%s(0x%x))\n", Reg(rt), off, Reg(base), regs[base].u32[0]);
+
+    regs[rt].u128 = bus->read<__uint128_t>(addr);
 }
 
 void EmotionEngine::sq(Opcode i)
@@ -368,9 +382,9 @@ void EmotionEngine::sq(Opcode i)
 
     uint32_t addr = regs[base].u32[0] + off;
 
-    bus->write(addr, regs[rt].u128);
-
     if (can_disassemble) printf("sq %s, %d(%s(0x%x))\n", Reg(rt), off, Reg(base), regs[base].u32[0]);
+
+   	bus->write<__uint128_t>(addr, regs[rt].u128);
 }
 
 void EmotionEngine::lb(Opcode i)
@@ -478,9 +492,9 @@ void EmotionEngine::sh(Opcode i)
 
     uint32_t addr = regs[base].u32[0] + off;
 
-    bus->write<uint16_t>(addr, regs[rt].u16[0]);
-
     if (can_disassemble) printf("sh %s, %d(%s)\n", Reg(rt), off, Reg(base));
+
+    bus->write<uint16_t>(addr, regs[rt].u16[0]);
 }
 
 void EmotionEngine::sw(Opcode i)
@@ -546,6 +560,19 @@ void EmotionEngine::sdr(Opcode i)
     if (can_disassemble) printf("sdr %s, %s(0x%08x)\n", Reg(rt), Reg(base), offset);
 }
 
+void EmotionEngine::lwc1(Opcode i)
+{
+    int base = i.i_type.rs;
+    int rt = i.i_type.rt;
+	int16_t off = (int16_t)i.i_type.imm;
+	
+    uint32_t addr = regs[base].u32[0] + off;
+
+	cop1.regs.u[rt] = bus->read<uint32_t>(addr);
+
+    if (can_disassemble) printf("lwc1 f%d, %d(%s)\n", rt, off, Reg(base));
+}
+
 void EmotionEngine::ld(Opcode i)
 {
     int base = i.i_type.rs;
@@ -582,7 +609,7 @@ void EmotionEngine::sd(Opcode i)
 
     bus->write<uint64_t>(addr, regs[rt].u64[0]);
 
-    if (can_disassemble) printf("sd %s, %d(%s)\n", Reg(rt), off, Reg(base));
+ 	if (can_disassemble) printf("sd %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
 
 
@@ -700,10 +727,15 @@ void EmotionEngine::movn(Opcode i)
     if (can_disassemble) printf("movn %s, %s, %s\n", Reg(rt), Reg(rd), Reg(rs));
 }
 
-void EmotionEngine::syscall(Opcode i)
+void EmotionEngine::syscall(Opcode)
 {
 	can_disassemble = false;
-	//printf("syscall num %d\n", regs[3].u64[0]);
+	if (regs[3].u64[0] != 122)
+		printf("syscall num %d\n", regs[3].u64[0]);
+	if (regs[3].u64[0] == 0x77)
+	{
+		HandleSifSetDma();
+	}
 	exception(8, false);
 }
 
@@ -727,6 +759,14 @@ void EmotionEngine::mfhi(Opcode i)
     if (can_disassemble) printf("mfhi %s\n", Reg(rd));
 }
 
+void EmotionEngine::mthi(Opcode i)
+{
+    int rs = i.i_type.rs;
+	hi = regs[rs].u64[0];
+
+	if (can_disassemble) printf("mthi %s\n", Reg(rs));
+}
+
 void EmotionEngine::mflo(Opcode i)
 {
     int rd = i.r_type.rd;
@@ -734,6 +774,14 @@ void EmotionEngine::mflo(Opcode i)
     regs[rd].u64[0] = lo;
 
     if (can_disassemble) printf("mflo %s\n", Reg(rd));
+}
+
+void EmotionEngine::mtlo(Opcode i)
+{
+    int rs = i.i_type.rs;
+	lo = regs[rs].u64[0];
+
+	if (can_disassemble) printf("mtlo %s\n", Reg(rs));
 }
 
 void EmotionEngine::dsllv(Opcode i)
@@ -882,6 +930,20 @@ void EmotionEngine::op_nor(Opcode i)
     if (can_disassemble) printf("nor %s, %s, %s\n", Reg(rd), Reg(rt), Reg(rs));
 }
 
+void EmotionEngine::mfsa(Opcode i)
+{
+    int rd = i.r_type.rd;
+	regs[rd].u64[0] = sa;
+	if (can_disassemble) printf("mfsa %s\n", Reg(rd));
+}
+
+void EmotionEngine::mtsa(Opcode i)
+{
+    int rs = i.r_type.rs;
+	sa = regs[rs].u64[0];
+	if (can_disassemble) printf("mtsa %s\n", Reg(rs));
+}
+
 void EmotionEngine::slt(Opcode i)
 {
     int rd = i.r_type.rd;
@@ -918,6 +980,20 @@ void EmotionEngine::daddu(Opcode i)
     regs[rd].u64[0] = reg1 + reg2;
 
     if (can_disassemble) printf("daddu %s, %s, %s (0x%08lx)\n", Reg(rd), Reg(rs), Reg(rt), regs[rd].u64[0]);
+}
+
+void EmotionEngine::dsubu(Opcode i)
+{
+    int rd = i.r_type.rd;
+    int rs = i.r_type.rs;
+    int rt = i.r_type.rt;
+
+    int64_t reg1 = regs[rs].u64[0];
+    int64_t reg2 = regs[rt].u64[0];
+
+	regs[rd].u64[0] = reg1 - reg2;
+	
+    if (can_disassemble) printf("dsubu %s, %s, %s (0x%08lx)\n", Reg(rd), Reg(rs), Reg(rt), regs[rd].u64[0]);	
 }
 
 void EmotionEngine::dsll(Opcode i)
@@ -1099,6 +1175,41 @@ void EmotionEngine::bgezall(Opcode i)
 }
 
 
+void EmotionEngine::plzcw(Opcode i)
+{
+	uint16_t rd = i.r_type.rd;
+	uint16_t rs = i.r_type.rs;
+
+	for (int i = 0; i < 2; i++)
+	{
+		uint32_t word = regs[rs].u32[i];
+		bool msb = word & (1 << 31);
+
+		word = (msb ? ~word : word);
+
+		regs[rd].u32[i] = (word != 0 ? __builtin_clz(word) - 1 : 0x1f);
+	}
+
+	if (can_disassemble) printf("plzcw %s, %s\n", Reg(rd), Reg(rs));
+}
+
+void EmotionEngine::mfhi1(Opcode i)
+{
+    int rd = i.r_type.rd;
+
+    regs[rd].u64[0] = hi1;
+
+    if (can_disassemble) printf("mfhi1 %s\n", Reg(rd));
+}
+
+void EmotionEngine::mthi1(Opcode i)
+{
+    int rs = i.i_type.rs;
+	hi1 = regs[rs].u64[0];
+
+	if (can_disassemble) printf("mthi1 %s\n", Reg(rs));
+}
+
 void EmotionEngine::mflo1(Opcode i)
 {
     int rd = i.r_type.rd;
@@ -1106,6 +1217,14 @@ void EmotionEngine::mflo1(Opcode i)
     regs[rd].u64[0] = lo1;
 
     if (can_disassemble) printf("mflo1 %s\n", Reg(rd));
+}
+
+void EmotionEngine::mtlo1(Opcode i)
+{
+    int rs = i.i_type.rs;
+	lo1 = regs[rs].u64[0];
+
+	if (can_disassemble) printf("mthi1 %s\n", Reg(rs));
 }
 
 void EmotionEngine::mult1(Opcode i)
@@ -1212,6 +1331,39 @@ void EmotionEngine::ctc1(Opcode i)
 	if (can_disassemble) printf("ctc1 %s, r%d\n", Reg(reg), cop_reg);
 }
 
+void EmotionEngine::cfc1(Opcode i)
+{
+	int emotion_reg = i.r_type.rt;
+	int cop_reg = i.r_type.rd;
+	
+	auto& control = cop1.control;
+
+	int32_t reg;
+	switch (cop_reg)
+	{
+	case 0:
+		reg = 0x2E00;
+		break;
+	case 31:
+		reg = 1;
+		reg |= control.su << 3;
+        reg |= control.so << 4;
+        reg |= control.sd << 5;
+        reg |= control.si << 6;
+        reg |= control.u << 14;
+        reg |= control.o << 15;
+        reg |= control.d << 16;
+        reg |= control.i << 17;
+        reg |= control.condition << 23;
+		break;
+	default:
+		reg = 0;
+	}
+
+	regs[emotion_reg].u64[0] = (int64_t)reg;
+
+	if (can_disassemble) printf("cfc1 %s, r%d\n", Reg(emotion_reg), cop_reg);
+}
 
 void EmotionEngine::bc(Opcode i)
 {
@@ -1288,7 +1440,7 @@ void EmotionEngine::cfc2(Opcode i)
 
 	regs[rt].u64[0] = (int32_t)vu0->cfc(id);
 
-	if (can_disassemble) printf("cfc2 %s, c%ld\n", Reg(rt), id);
+	if (can_disassemble) printf("cfc2 %s, c%d\n", Reg(rt), id);
 }
 
 void EmotionEngine::ctc2(Opcode i)

@@ -95,27 +95,126 @@ void IoDma::tick(int cycles)
 			bool enable = globals.dpcr2 & (1 << ((id - 7) * 4 + 3));
 			if (channel.control.running && enable)
 			{
-				switch (id)
+				if (channel.block_conf.count > 0)
 				{
-				case DMAChannels::SIF1:
-				{
-					auto sif = bus->GetSif();
-					if (!sif->fifo1.empty())
+					switch (id)
 					{
-						auto data = sif->fifo1.front();
-						sif->fifo1.pop();
-
-						bus->write<uint32_t>(channel.address, data);
+					case DMAChannels::SIF0:
+					{
+						auto sif = bus->GetSif();
+						auto data = *(uint32_t*)&bus->GetRam()[channel.address];
 						channel.address += 4;
 						channel.block_conf.count--;
+						sif->fifo0.push(data);
+
+						break;
 					}
-					break;
+					case DMAChannels::SIF1:
+					{
+						auto sif = bus->GetSif();
+						if (!sif->fifo1.empty())
+						{
+							auto data = sif->fifo1.front();
+							sif->fifo1.pop();
+
+							bus->write<uint32_t>(channel.address, data);
+							channel.address += 4;
+							channel.block_conf.count--;
+						}
+						break;
+					}
+					default:
+						printf("Transfer on unknown channel %d\n", id);
+						exit(1);
+					}
 				}
-				default:
-					printf("Transfer on unknown channel %d\n", id);
-					exit(1);
+				else if (channel.end_transfer)
+				{
+					channel.control.running = 0;
+					channel.end_transfer = false;
+					globals.dicr2.flags |= (1 << (id - 7));
+
+					if (globals.dicr2.flags & globals.dicr2.mask)
+					{
+						printf("Triggering DMA interrupt\n");
+						bus->TriggerInterrupt(3);
+					}
+				}
+				else
+				{
+					fetch_tag(id);
 				}
 			}
 		}
     }
+}
+
+void IoDma::fetch_tag(uint32_t id)
+{
+	DMATag tag;
+	auto& channel = channels[id];
+
+	uint32_t* data;
+	switch (id)
+	{
+	case DMAChannels::SIF0:
+	{
+		auto sif = bus->GetSif();
+
+		tag.value = *(uint64_t*)&bus->GetRam()[channel.tadr];
+
+		printf("[emu/IoDma]: Read SIF0 DMA tag 0x%08lx\n", tag.value);
+		channel.address = tag.address;
+
+		channel.block_conf.count = (tag.tranfer_size + 3) & 0xfffffffc;
+		channel.tadr += 8;
+
+		if (channel.control.bit_8)
+		{
+			uint32_t* data = (uint32_t*)&bus->GetRam()[channel.tadr];
+			channel.tadr += 8;
+
+			sif->fifo0.push(data[0]);
+			sif->fifo0.push(data[1]);
+		}
+
+		if (tag.end_transfer || tag.irq)
+		{
+			channel.end_transfer = true;
+		}
+
+		break;
+	}
+	case DMAChannels::SIF1:
+	{
+		auto sif = bus->GetSif();
+		if (sif->fifo1.size() >= 4)
+		{
+			uint32_t data[2];
+			for (int i = 0; i < 2; i++)
+			{
+				data[i] = sif->fifo1.front();
+				sif->fifo1.pop();
+			}
+
+			sif->fifo1.pop();
+			sif->fifo1.pop();
+
+			tag.value = *(uint64_t*)data;
+			printf("[emu/IoDma]: Read SIF1 DMA tag 0x%08lx\n", tag.value);
+
+			channel.address = tag.address;
+			channel.block_conf.count = tag.tranfer_size;
+
+			if (tag.end_transfer || tag.irq)
+			{
+				channel.end_transfer = true;
+			}
+		}
+		break;
+	}
+	default:
+		printf("Tag fetch on unknown channel %d\n", id);
+		exit(1);
+	}
 }

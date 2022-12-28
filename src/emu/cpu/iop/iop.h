@@ -207,6 +207,7 @@ private:
     void op_mtlo(); // 0x13
     void op_mult(); // 0x18
     void op_multu(); // 0x19
+	void op_div(); // 0x1A
     void op_divu(); // 0x1B
     void op_add(); // 0x20
     void op_addu(); // 0x21
@@ -222,6 +223,7 @@ private:
 
     void op_mfc0(); // 0x00
     void op_mtc0(); // 0x04
+	void op_rfe(); // 0x10
 
 	void direct_jump();
 	void handle_load_delay();
@@ -229,6 +231,23 @@ private:
 	void load(uint32_t regN, uint32_t value);
 
     bool isCacheIsolated() {return Cop0.status.IsC;}
+
+	bool can_disassemble = false;
+
+	enum class Exception 
+    {
+        Interrupt = 0x0,
+        ReadError = 0x4,
+        WriteError = 0x5,
+        BusError = 0x6,
+        Syscall = 0x8,
+        Break = 0x9,
+        IllegalInstr = 0xA,
+        CoprocessorError = 0xB,
+        Overflow = 0xC
+    };
+
+	void exception(Exception cause, uint32_t cop = 0);
 
 	Opcode i, next_instr;
 public:

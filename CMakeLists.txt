@@ -16,7 +16,8 @@ set(SOURCES src/main.cpp
             src/emu/cpu/iop/iop.cpp
             src/emu/cpu/iop/opcodes.cpp
             src/emu/cpu/iop/dma.cpp
-            src/emu/cpu/iop/timers.cpp)
+            src/emu/cpu/iop/timers.cpp
+	    src/emu/cpu/cop0.cpp)
 
 set(CMAKE_BUILD_TYPE Debug)
 
