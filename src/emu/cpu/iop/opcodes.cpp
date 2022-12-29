@@ -32,6 +32,7 @@ void IoProcessor::op_special()
         case 0b011001: op_multu(); break;
         case 0b100110: op_xor(); break;
         case 0b011000: op_mult(); break;
+		case 0b000111: op_srav(); break;
 		default:
 			printf("[emu/IOP]: Unknown special opcode 0x%02x\n", i.r_type.func);
 			exit(1);
@@ -275,6 +276,23 @@ void IoProcessor::op_lh()
     if (can_disassemble) printf("lh %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
 
+void IoProcessor::op_lwl()
+{
+	static const uint32_t LWL_MASK[4] = { 0xffffff, 0x0000ffff, 0x000000ff, 0x00000000 };
+    static const uint8_t LWL_SHIFT[4] = { 24, 16, 8, 0 };
+
+	int16_t offset = (int16_t)(i.i_type.imm);
+	uint32_t dest = i.i_type.rt;
+	uint32_t base = i.i_type.rs;
+	uint32_t addr = regs[base] + offset;
+	int shift = addr & 0x3;
+
+	uint32_t mem = bus->read_iop<uint32_t>(addr & ~0x3);
+	load(dest, (regs[dest] & LWL_MASK[shift]) | (mem << LWL_SHIFT[shift]));
+
+	if (can_disassemble) printf("lwl %s, %d(%s)\n", Reg(dest), offset, Reg(base));
+}
+
 void IoProcessor::op_lw()
 {
     int rt = i.i_type.rt;
@@ -336,6 +354,23 @@ void IoProcessor::op_lhu()
     if (can_disassemble) printf("lhu %s, %d(%s)\n", Reg(rt), off, Reg(base));
 }
 
+void IoProcessor::op_lwr()
+{
+	static const uint32_t LWR_MASK[4] = { 0x000000, 0xff000000, 0xffff0000, 0xffffff00 };
+    static const uint8_t LWR_SHIFT[4] = { 0, 8, 16, 24 };
+	int16_t offset = (int16_t)(i.i_type.imm);
+	uint32_t dest = i.i_type.rt;
+	uint32_t base = i.i_type.rs;
+	uint32_t addr = regs[base] + offset;
+	int shift = addr & 0x3;
+
+	uint32_t mem = bus->read_iop<uint32_t>(addr & ~0x3);
+	mem = (regs[dest] & LWR_MASK[shift]) | (mem >> LWR_SHIFT[shift]);
+	load(dest, mem);
+
+	if (can_disassemble) printf("lwr %s, %d(%s)\n", Reg(dest), offset, Reg(base));
+}
+
 void IoProcessor::op_sb()
 {
     int rt = i.i_type.rt;
@@ -371,6 +406,21 @@ void IoProcessor::op_sh()
         bus->write_iop<uint16_t>(addr, regs[rt]);
 }
 
+void IoProcessor::op_swl()
+{
+	static const uint32_t SWL_MASK[4] = { 0xffffff00, 0xffff0000, 0xff000000, 0x00000000 };
+    static const uint8_t SWL_SHIFT[4] = { 24, 16, 8, 0 };
+	int16_t offset = (int16_t)(i.i_type.imm);
+	uint32_t source = i.i_type.rt;
+	uint32_t base = i.i_type.rs;
+	uint32_t addr = regs[base] + offset;
+	int shift = addr & 0x3;
+
+	uint32_t mem = bus->read_iop<uint32_t>(addr & ~3);
+
+	bus->write_iop<uint32_t>(addr & ~0x3, (regs[source] >> SWL_SHIFT[shift]) | (mem & SWL_MASK[shift]));
+}
+
 void IoProcessor::op_sw()
 {
     int rt = i.i_type.rt;
@@ -389,6 +439,20 @@ void IoProcessor::op_sw()
     
     if (!isCacheIsolated())
         bus->write_iop(addr, regs[rt]);
+}
+
+void IoProcessor::op_swr()
+{
+	static const uint32_t SWR_MASK[4] = { 0x00000000, 0x000000ff, 0x0000ffff, 0x00ffffff };
+    static const uint8_t SWR_SHIFT[4] = { 0, 8, 16, 24 };
+	int16_t offset = (int16_t)(i.i_type.imm);
+	uint32_t source = i.i_type.rt;
+	uint32_t base = i.i_type.rs;
+	uint32_t addr = regs[base] + offset;
+	int shift = addr & 0x3;
+	uint32_t mem = bus->read_iop<uint32_t>(addr & ~3);
+
+	bus->write_iop<uint32_t>(addr & ~0x3, (regs[source] << SWR_SHIFT[shift]) | (mem & SWR_MASK[shift]));
 }
 
 void IoProcessor::op_sll()
@@ -447,6 +511,19 @@ void IoProcessor::op_srlv()
     set_reg(rd, regs[rt] >> sa);
 
     if (can_disassemble) printf("sllv %s, %s, %s\n", Reg(rd), Reg(rt), Reg(rs));
+}
+
+void IoProcessor::op_srav()
+{
+    int rd = i.r_type.rd;
+    int rt = i.r_type.rt;
+    int rs = i.r_type.rs;
+
+	int32_t source = (int32_t)regs[rs];
+	source >>= regs[rs] & 0x1F;
+	regs[rd] = (uint32_t)source;
+
+    if (can_disassemble) printf("srav %s, %s, %s\n", Reg(rd), Reg(rt), Reg(rs));
 }
 
 void IoProcessor::op_jr()

@@ -239,6 +239,9 @@ void EmotionEngine::Clock(int cycles)
 			case 0x18:
 				mult(instr);
 				break;
+			case 0x19:
+				multu(instr);
+				break;
 			case 0x1A:
 				div(instr);
 				break;
@@ -256,6 +259,9 @@ void EmotionEngine::Clock(int cycles)
 				break;
 			case 0x25:
 				op_or(instr);
+				break;
+			case 0x26:
+				op_xor(instr);
 				break;
 			case 0x27:
 				op_nor(instr);
@@ -283,6 +289,9 @@ void EmotionEngine::Clock(int cycles)
 				break;
 			case 0x3a:
 				dsrl(instr);
+				break;
+			case 0x3b:
+				dsra(instr);
 				break;
 			case 0x3c:
 				dsll32(instr);
@@ -448,6 +457,9 @@ void EmotionEngine::Clock(int cycles)
 		case 0x15:
 			bnel(instr);
 			break;
+		case 0x16:
+			blezl(instr);
+			break;
 		case 0x19:
 			daddiu(instr);
 			break;
@@ -463,6 +475,12 @@ void EmotionEngine::Clock(int cycles)
 			{
 			case 0x04:
 				plzcw(instr);
+				break;
+			case 0x08:
+				paddb(instr);
+				break;
+			case 0x09:
+				psubb(instr);
 				break;
 			case 0x10:
 				mfhi1(instr);
@@ -499,8 +517,20 @@ void EmotionEngine::Clock(int cycles)
 			{
 				switch (instr.r_type.sa)
 				{
+				case 0x09:
+					pmtlo(instr);
+					break;
+				case 0x0E:
+					pcpyud(instr);
+					break;
 				case 0x12:
 					por(instr);
+					break;
+				case 0x13:
+					pnor(instr);
+					break;
+				case 0x1B:
+					pcpyh(instr);
 					break;
 				default:
 					printf("[emu/CPU]: %s: Unknown mmi3 0x%08x (0x%02x)\n", __FUNCTION__, instr.full, instr.r_type.sa);
@@ -526,6 +556,9 @@ void EmotionEngine::Clock(int cycles)
 		case 0x21:
 			lh(instr);
 			break;
+		case 0x22:
+			lwl(instr);
+			break;
 		case 0x23:
 			lw(instr);
 			break;
@@ -534,6 +567,9 @@ void EmotionEngine::Clock(int cycles)
 			break;
 		case 0x25:
 			lhu(instr);
+			break;
+		case 0x26:
+			lwr(instr);
 			break;
 		case 0x27:
 			lwu(instr);
@@ -544,6 +580,9 @@ void EmotionEngine::Clock(int cycles)
 		case 0x29:
 			sh(instr);
 			break;
+		case 0x2a:
+			swl(instr);
+			break;
 		case 0x2b:
 			sw(instr);
 			break;
@@ -552,6 +591,9 @@ void EmotionEngine::Clock(int cycles)
 			break;
 		case 0x2d:
 			sdr(instr);
+			break;
+		case 0x2e:
+			swr(instr);
 			break;
 		case 0x2f:
 			// Cache
@@ -566,6 +608,9 @@ void EmotionEngine::Clock(int cycles)
 			break;
 		case 0x39:
 			swc1(instr);
+			break;
+		case 0x3e:
+			sqc2(instr);
 			break;
 		case 0x3f:
 			sd(instr);

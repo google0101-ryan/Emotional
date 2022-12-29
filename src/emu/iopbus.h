@@ -6,6 +6,7 @@
 #include <emu/cpu/iop/dma.h>
 #include <emu/dev/dvd.h>
 #include <emu/cpu/iop/timers.h>
+#include <emu/cpu/iop/sio2.h>
 #include <emu/sif.h>
 #include <fstream>
 
@@ -25,6 +26,7 @@ private:
     CDVD* dvd;
     SubsystemInterface* sif;
     Timer* timers;
+	SIO2* sio2;
 
     std::ofstream console;
 public:
@@ -40,6 +42,7 @@ public:
         dma = new IoDma(this, parent);
         dvd = new CDVD();
         timers = new Timer(this);
+		sio2 = new SIO2(this);
         console.open("iop_log.txt");
         printf("0x%08x\n", *(uint32_t*)(bios + 0x2700));
         //exit(1);
@@ -48,6 +51,7 @@ public:
     IoDma* GetIopDma() {return dma;}
     Timer* GetIopTimers() {return timers;}
     SubsystemInterface* GetSif() {return sif;}
+	SIO2* GetSIO2() {return sio2;}
 
     void OutputToLog(char c)
     {
@@ -76,6 +80,13 @@ public:
             return *(T*)(bios + (addr - 0x1FC00000));
         if (addr < 0x200000)
             return *(T*)&ram[addr];
+		if (addr == 0x1f900744)
+			return (1 << 7);
+		if ((addr & 0xFFFFF000) == 0x1f900000)
+		{
+			printf("Ignoring read from 0x%08x\n", addr);
+			return 0;
+		}
         
         switch (addr)
         {
@@ -84,6 +95,7 @@ public:
         case 0x1f801010:
         case 0x1f801450:
         case 0x1f801400:
+        case 0x1f801414:
             return 0;
         case 0x1F801080 ... 0x1F8010EC:
         case 0x1F801500 ... 0x1F80155C:
@@ -114,6 +126,8 @@ public:
         case 0x1D000040:
         case 0x1D000060:
             return sif->read(addr);
+		case 0x1f808200 ... 0x1f808280:
+			return sio2->read(addr);
         }
 
         printf("[emu/IopBus]: %s: Read from unknown addr 0x%08x\n", __FUNCTION__, addr);
@@ -142,6 +156,25 @@ public:
             *(T*)&ram[addr] = data;
             return;
         }
+
+		if ((addr & 0xFFFFF000) == 0x1f900000)
+			return;
+
+		if (addr >= 0x1F808200 && addr < 0x1F808240)
+		{
+			int index = addr - 0x1F808200;
+			sio2->set_send3(index >> 2, data);
+			return;
+		}
+		if (addr >= 0x1F808240 && addr < 0x1F808260)
+		{
+			int index = addr - 0x1F808240;
+			if (addr & 4)
+				sio2->set_send2(index >> 3, data);
+			else
+				sio2->set_send1(index >> 3, data);
+			return;
+		}
 
         switch (addr)
         {
@@ -204,8 +237,14 @@ public:
         case 0x1f801480 ... 0x1f8014ac:
             timers->write(addr, data);
             return;
+		case 0x1f808200 ... 0x1f808280:
+			sio2->write(addr, data);
+			return;
+        case 0x1f402004 ... 0x1f402018:
+			dvd->write(addr, data);
+			return;
         }
-        printf("[emu/IopBus]: %s: Write to unknown addr 0x%08x\n", __FUNCTION__, addr);
+        printf("[emu/IopBus]: %s: Write 0x%x to unknown addr 0x%08x\n", __FUNCTION__, data, addr);
         exit(1);
     }
 

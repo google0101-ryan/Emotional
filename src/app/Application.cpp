@@ -16,9 +16,9 @@ void Sig(int)
 
 bool Application::Init(int argc, char** argv)
 {
-    if (argc < 2)
+    if (argc < 3)
     {
-        printf("Usage: %s [bios]\n", argv[0]);
+        printf("Usage: %s [bios] <elf>\n", argv[0]);
         return false;
     }
 
@@ -26,7 +26,7 @@ bool Application::Init(int argc, char** argv)
 
     printf("[app/App]: %s: Initializing Bus\n", __FUNCTION__);
 
-    bus = new Bus(argv[1], success);
+    bus = new Bus(argv[1], argv[2], success);
 
     if (!success)
     {

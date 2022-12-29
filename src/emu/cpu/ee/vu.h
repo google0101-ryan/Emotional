@@ -111,8 +111,15 @@ public:
         return gpr[index].u[field];
     }
 
+	void SetGprF(int index, int field, float value)
+	{
+		if (index)
+			gpr[index].f[field] = value;
+	}
+
     void SetGprU(int index, int field, uint32_t value)
     {
-        gpr[index].u[field] = value;
+		if (index)
+	        gpr[index].u[field] = value;
     }
 };

@@ -39,6 +39,8 @@ private:
     IoProcessor* iop;
 
 	EmotionEngine* cpu;
+
+	std::string elf_name;
 public:
     static uint32_t Translate(uint32_t addr)
     {
@@ -64,7 +66,9 @@ public:
 		return addr;
     }
 
-    Bus(std::string biosName, bool& success);
+    Bus(std::string biosName, std::string elf, bool& success);
+
+	void LoadElf();
 
     void Clock();
 	void AttachCPU(EmotionEngine* ee) {this->cpu = ee;}
@@ -109,8 +113,12 @@ public:
             return *(T*)&ram[addr];
         if (addr >= 0x1c000000 && addr < 0x1c400000)
             return *(T*)&iop_ram[addr - 0x1c000000];
-        else if (addr >= 0x10003000 && addr <= 0x10006000)
+        else if (addr >= 0x10003000 && addr <= 0x100030A0)
             return (T)gif->read32(addr);
+        else if (addr >= 0x10003800 && addr <= 0x10003970)
+			return (T)vif0->read(addr);
+        else if (addr >= 0x10003C00 && addr <= 0x10003D70)
+			return (T)vif1->read(addr);
         else if (addr >= 0x1000E000 && addr <= 0x1000E060)
             return (T)ee_dmac->read_dma(addr);
         else if (addr >= 0x10002000 && addr <= 0x10002030)
@@ -119,6 +127,8 @@ public:
             return (T)ee_dmac->read(addr);
         else if (addr >= 0x1000F200 && addr <= 0x1000F260)
             return (T)sif->read(addr);
+        else if (addr >= 0x12000000 && addr <= 0x12002000)
+			return (T)gs->read32(addr);
 
         switch (addr)
         {
@@ -219,7 +229,7 @@ public:
             vu1->write_code<T>(addr - 0x11008000, data);
             return;
         }
-        else if (addr >= 0x1100C000 && addr < 0x11010000)
+        else if (addr >= 0x1100C000 && addr <= 0x11010000)
         {
             vu1->write_data<T>(addr - 0x1100C000, data);
             return;
@@ -236,12 +246,12 @@ public:
         }
         else if (addr == 0x10004000)
         {
-            vif0->write_fifo(data);
+            vif0->write_fifo((uint32_t)data);
             return;
         }
         else if (addr == 0x10005000)
         {
-            vif1->write_fifo(data);
+            vif1->write_fifo((uint32_t)data);
             return;
         }
         else if (addr >= 0x10003000 && addr <= 0x10006000)
@@ -328,6 +338,8 @@ public:
     SubsystemInterface* GetSif() {return sif;}
     IoProcessor* GetIop() {return iop;}
     IopBus* GetBus() {return iop_bus;}
+	VectorInterface* GetVIF(int id) {if (id) return vif1; else return vif0;}
+	GIF* GetGIF() {return gif;}
 
     void Dump();
 };

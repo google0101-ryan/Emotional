@@ -184,12 +184,16 @@ private:
     void op_cop0(); // 0x10
     void op_lb(); // 0x20
     void op_lh(); // 0x21
+	void op_lwl(); // 0x22
     void op_lw(); // 0x23
     void op_lbu(); // 0x24
     void op_lhu(); // 0x25
+	void op_lwr(); // 0x26
     void op_sb(); // 0x28
     void op_sh(); // 0x29
+	void op_swl(); // 0x2A
     void op_sw(); // 0x2B
+	void op_swr(); // 0x2E
 
     // special
 
@@ -198,6 +202,7 @@ private:
     void op_sra(); // 0x03
     void op_sllv(); // 0x04
     void op_srlv(); // 0x06
+	void op_srav(); // 0x07
     void op_jr(); // 0x08
     void op_jalr(); // 0x09
     void op_syscall(); // 0x0C

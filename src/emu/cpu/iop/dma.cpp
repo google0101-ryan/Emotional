@@ -99,6 +99,37 @@ void IoDma::tick(int cycles)
 				{
 					switch (id)
 					{
+					case DMAChannels::SIO2in:
+					{
+						int size = channel.block_conf.count * channel.block_conf.size * 4;
+						while (size)
+						{
+							bus->write<uint8_t>(0x1f808260, bus->GetRam()[channel.address]);
+							channel.address++;
+							size--;
+						}
+						channel.block_conf.count = 0;
+						channel.end_transfer = true;
+						break;
+					}
+					case DMAChannels::SIO2out:
+					{
+						int size = channel.block_conf.count * channel.block_conf.size * 4;
+						while (size)
+						{
+							bus->GetRam()[channel.address] = bus->GetSIO2()->read_serial();
+							channel.address++;
+							size--;
+						}
+						channel.block_conf.count = 0;
+						channel.end_transfer = true;
+						break;
+					}
+					case DMAChannels::SPU2:
+					{
+						channel.block_conf.count--;
+						break;
+					}
 					case DMAChannels::SIF0:
 					{
 						auto sif = bus->GetSif();
@@ -157,6 +188,11 @@ void IoDma::fetch_tag(uint32_t id)
 	uint32_t* data;
 	switch (id)
 	{
+	case DMAChannels::SPU2:
+	{
+		channel.end_transfer = true;
+		break;
+	}
 	case DMAChannels::SIF0:
 	{
 		auto sif = bus->GetSif();

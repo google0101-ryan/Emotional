@@ -24,8 +24,13 @@ void GIF::process_packed(uint128_t qword)
         printf("%s\n", (qword.u128 >> 111) & 1 ? "xyz3f" : "xyz2f");
         break;
     case 5:
-        printf("%s\n", (qword.u128 >> 111) & 1 ? "xyz3" : "xyz2");
+	{
+		float x = (qword.u128 & 0xFFFF);
+		float y = ((qword.u128 >> 32) & 0xFFFF);
+		float z = ((qword.u128 >> 96) & 0xFFFF);
+        printf("%s (%0.2f, %0.2f, %0.2f)\n", (qword.u128 >> 111) & 1 ? "xyz3" : "xyz2", x, y, z);
         break;
+	}
     case 10:
         printf("fog\n");
         break;

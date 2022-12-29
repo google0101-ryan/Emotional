@@ -122,8 +122,6 @@ void IoProcessor::Clock(int cycles)
 			exit(1);
 		}
 
-		if ((pc & 0xFFFFFF00) == 0xbc00) can_disassemble = true;
-
 		direct_jump();
 
 		switch (i.opcode)
@@ -152,8 +150,12 @@ void IoProcessor::Clock(int cycles)
         case 0b001011: op_sltiu(); break;
         case 0b100101: op_lhu(); break;
         case 0b100001: op_lh(); break;
+		case 0b100010: op_lwl(); break;
+		case 0b100110: op_lwr(); break;
+		case 0b101010: op_swl(); break;
+		case 0b101110: op_swr(); break;
         default:
-			printf("[emu/IOP]Unknown instruction 0x%02x\n", i.opcode);
+			printf("[emu/IOP]: Unknown instruction 0x%02x\n", i.opcode);
 			exit(1);
         }
 

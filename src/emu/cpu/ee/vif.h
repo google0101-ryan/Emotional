@@ -156,7 +156,9 @@ public:
 
 	void tick(int cycles);
 
-    void write_fifo(uint32_t data);
+    bool write_fifo(uint32_t data);
+    bool write_fifo(__uint128_t data);
 
     void write(uint32_t addr, uint32_t data);
+	uint32_t read(uint32_t addr);
 };

@@ -116,6 +116,33 @@ void EmotionDma::tick(int cycles)
 				{
 					switch (id)
 					{
+					case CHANNELS::VIF1:
+					{
+						auto vif = bus->GetVIF(1);
+						__uint128_t qword = *(__uint128_t*)&bus->grab_ee_ram()[channel.address];
+						if (vif->write_fifo(qword))
+						{
+							channel.address += 16;
+							channel.qword_count--;
+
+							if (!channel.qword_count)
+								channel.end_transfer = true;
+						}
+						break;
+					}
+					case CHANNELS::GIF:
+					{
+						auto gif = bus->GetGIF();
+						uint128_t qword;
+						qword.u128 = *(__uint128_t*)&bus->grab_ee_ram()[channel.address];
+						
+						gif->write32(0x10006000, qword);
+						channel.qword_count--;
+						channel.address += 16;
+						if (!channel.qword_count)
+							channel.end_transfer = true;
+						break;
+					}
 					case CHANNELS::SIF0:
 					{
 						auto sif = bus->GetSif();
@@ -263,6 +290,10 @@ void EmotionDma::fetch_tag(int id)
 		case DMASourceID::CNT:
 			channel.address = channel.tag_address.address + 16;
 			channel.tag_address.value = channel.address + channel.qword_count * 16;
+			break;
+		case DMASourceID::NEXT:
+			channel.address = channel.tag_address.address + 16;
+			channel.tag_address.value = tag.address;
 			break;
 		case DMASourceID::REF:
 			channel.address = tag.address;

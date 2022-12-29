@@ -1,5 +1,6 @@
 #include <emu/cpu/ee/vu.h>
 #include <app/Application.h>
+#include <fstream>
 
 #define _x(f) f&8
 #define _y(f) f&4
@@ -45,6 +46,18 @@ void VectorUnit::special1(Opcode i)
     uint32_t instr = i.full;
     switch (i.r_type.func)
     {
+	case 0x28:
+	{
+		for (int i = 0; i < 4; i++)
+		{
+			if (_field & (1 << (3 - i)))
+			{
+				float result = convert(gpr[_fs_].u[i]) + convert(gpr[_ft_].u[i]);
+				SetGprF(_ft_, i, result);
+			}
+		}
+		break;
+	}
     case 0x2c:
     {
         //printf("vsub");
@@ -72,6 +85,19 @@ void VectorUnit::special1(Opcode i)
         uint16_t op = (i.full & 0x3) | ((i.full >> 4) & 0x7C);
         switch (op)
         {
+		case 0x31:
+		{
+			uint32_t x = gpr[_fs_].u[0];
+			if (_x(_field))
+				SetGprU(_ft_, 0, gpr[_fs_].u[1]);
+			if (_y(_field))
+				SetGprU(_ft_, 1, gpr[_fs_].u[2]);
+			if (_z(_field))
+				SetGprU(_ft_, 2, gpr[_fs_].u[3]);
+			if (_w(_field))
+				SetGprU(_ft_, 3, x);
+			break;
+		}
         case 0x35:
         {
             i_regs[_it_].u = _it_;
@@ -127,4 +153,13 @@ void VectorUnit::Dump()
         for (int j = 0; j < 4; j++) printf(" %d -> %0.2f", j, convert(gpr[i].f[j]));
         printf("\n");
     }
+
+	std::ofstream file("vu" + std::to_string(id) + std::string("_instr_mem.dump"));
+
+	for (int i = 0; i < 0x4000; i++)
+	{
+		file << instr_mem[i];
+	}
+
+	file.close();
 }

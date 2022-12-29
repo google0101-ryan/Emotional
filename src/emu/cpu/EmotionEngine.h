@@ -246,6 +246,7 @@ private:
 	void di(Opcode i); // 0x10 0x10 0x39
     void beql(Opcode i); // 0x14
     void bnel(Opcode i); // 0x15
+	void blezl(Opcode i); // 0x16
     void daddiu(Opcode i); // 0x19
     void ldl(Opcode i); // 0x1A
     void ldr(Opcode i); // 0x1B
@@ -253,18 +254,23 @@ private:
     void sq(Opcode i); // 0x1F
     void lb(Opcode i); // 0x20
     void lh(Opcode i); // 0x21
+	void lwl(Opcode i); // 0x22
     void lw(Opcode i); // 0x23
     void lbu(Opcode i); // 0x24
     void lhu(Opcode i); // 0x25
+	void lwr(Opcode i); // 0x26
     void lwu(Opcode i); // 0x27
     void sb(Opcode i); // 0x28
     void sh(Opcode i); // 0x29
+	void swl(Opcode i); // 0x2A
     void sw(Opcode i); // 0x2B
     void sdl(Opcode i); // 0x2C
     void sdr(Opcode i); // 0x2D
+	void swr(Opcode i); // 0x2E
 	void lwc1(Opcode i); // 0x31
     void ld(Opcode i); // 0x37
     void swc1(Opcode i); // 0x39
+	void sqc2(Opcode i); // 0x3E
     void sd(Opcode i); // 0x3f
     
     void sll(Opcode i); // 0x00
@@ -285,12 +291,14 @@ private:
     void dsllv(Opcode i); // 0x14
     void dsrav(Opcode i); // 0x17
     void mult(Opcode i); // 0x18
+	void multu(Opcode i); // 0x19
     void div(Opcode i); // 0x1A
     void divu(Opcode i); // 0x1B
     void addu(Opcode i); // 0x21
     void subu(Opcode i); // 0x23
     void op_and(Opcode i); // 0x24
     void op_or(Opcode i); // 0x25
+    void op_xor(Opcode i); // 0x26
     void op_nor(Opcode i); // 0x27
 	void mfsa(Opcode i); // 0x28
 	void mtsa(Opcode i); // 0x29
@@ -300,6 +308,7 @@ private:
 	void dsubu(Opcode i); // 0x2f
     void dsll(Opcode i); // 0x38
     void dsrl(Opcode i); // 0x3a
+	void dsra(Opcode i); // 0x3b
     void dsll32(Opcode i); // 0x3c
     void dsrl32(Opcode i); // 0x3e
     void dsra32(Opcode i); // 0x3f
@@ -316,6 +325,8 @@ private:
     // mmi
 
 	void plzcw(Opcode i); // 0x04
+	void paddb(Opcode i); // 0x08
+	void psubb(Opcode i); // 0x09
 	void mfhi1(Opcode i); // 0x10
 	void mthi1(Opcode i); // 0x11
     void mflo1(Opcode i); // 0x12
@@ -328,7 +339,11 @@ private:
 
     // mmi3
 
+	void pmtlo(Opcode i); // 0x09
+	void pcpyud(Opcode i); // 0x0E
     void por(Opcode i); // 0x12
+	void pnor(Opcode i); // 0x13
+	void pcpyh(Opcode i); // 0x1B
 
     // cop1
 
@@ -585,6 +600,12 @@ private:
 public:
     EmotionEngine(Bus* bus, VectorUnit* vu0);
 	bool int_pending();
+
+	void JumpToEntry(uint32_t entry)
+	{
+		pc = entry;
+		fetch_next();
+	}
 
 	void SetINT1()
 	{

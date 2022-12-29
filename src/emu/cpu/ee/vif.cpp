@@ -1,4 +1,5 @@
 #include <emu/cpu/ee/vif.h>
+#include "vif.h"
 
 void VectorInterface::write(uint32_t addr, uint32_t data)
 {
@@ -23,6 +24,20 @@ void VectorInterface::write(uint32_t addr, uint32_t data)
         printf("[emu/VIF%d]: %s: Write to unknown addr 0x%08x\n", id, __FUNCTION__, addr);
         exit(1);
     }
+}
+
+uint32_t VectorInterface::read(uint32_t addr)
+{
+	int off = (addr >> 4) & 0xf;
+
+    switch (off)
+    {
+	case 0:
+		return stat.value;
+	default:
+		printf("[emu/VIF%d]: Read from unknown address 0x%08x\n", id, addr);
+		exit(1);
+	}
 }
 
 void VectorInterface::tick(int cycles)
@@ -62,6 +77,8 @@ void VectorInterface::process_command()
 	case VIFCommands::STMASK:
 		subpacket_count = 1;
 		break;
+	case VIFCommands::MSKPATH3:
+		break;
 	default:
 		printf("Unknown VIF%d command 0x%02x\n", id, command.command);
 		exit(1);
@@ -86,12 +103,23 @@ void VectorInterface::execute_command()
 	subpacket_count--;
 }
 
-void VectorInterface::write_fifo(uint32_t data)
+bool VectorInterface::write_fifo(uint32_t data)
 {
     if (fifo.size() > (fifo_size - 1))
-        return;
+		return false;
     
     printf("Adding 0x%08x to VIF%d fifo\n", data, id);
     fifo.push(data);
-    return;
+    return true;
+}
+
+bool VectorInterface::write_fifo(__uint128_t data)
+{
+	uint32_t* buf = (uint32_t*)&data;
+	for (int i = 0; i < 4; i++)
+	{
+		if (!write_fifo(buf[i]))
+			return false;
+	}
+	return true;
 }
