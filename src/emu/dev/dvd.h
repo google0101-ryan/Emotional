@@ -15,6 +15,8 @@ private:
 	uint8_t S_params;
 	uint8_t S_out_params;
 
+	uint8_t I_STAT = 0;
+
 	void handle_command(uint8_t command)
 	{
 		s_status &= ~0x40;
@@ -67,6 +69,9 @@ public:
 			S_command_params[S_params] = data;
 			S_params++;
 			break;
+		case 0x1f402008:
+			I_STAT &= ~(data);
+			break;
         default:
             printf("[emu/CDVD]: %s: Write to unknown address 0x%08x\n", __FUNCTION__, addr);
             exit(1);
@@ -79,6 +84,10 @@ public:
         {
         case 0x1f402005:
             return n_status;
+        case 0x1f402006:
+			return 0;
+        case 0x1f402008:
+			return I_STAT;
 		case 0x1f402018:
 		{
 			if (S_out_params <= 0)

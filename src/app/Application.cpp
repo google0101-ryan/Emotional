@@ -7,6 +7,7 @@ int Application::exit_code = 0;
 
 Bus* Application::bus = nullptr;
 EmotionEngine* Application::ee = nullptr;
+Window* Application::window = nullptr;
 
 void Sig(int)
 {
@@ -18,15 +19,27 @@ bool Application::Init(int argc, char** argv)
 {
     if (argc < 3)
     {
-        printf("Usage: %s [bios] <elf>\n", argv[0]);
+        printf("Usage: %s [bios] [elf] --fast-boot\n", argv[0]);
         return false;
     }
+
+	window = new Window();
+	Renderer* renderer = new Renderer();
+	window->AttachRenderer(renderer);
 
     bool success = false;
 
     printf("[app/App]: %s: Initializing Bus\n", __FUNCTION__);
 
-    bus = new Bus(argv[1], argv[2], success);
+    bus = new Bus(argv[1], argv[2], success, renderer);
+
+	if (argc >= 4)
+	{
+		if (!strncmp(argv[3], "--fast-boot", 11))
+		{
+			bus->FastBoot();
+		}
+	}
 
     if (!success)
     {
@@ -50,12 +63,37 @@ bool vblank_started = false;
 
 int Application::Run()
 {
-    while (isRunning)
+    while (isRunning && !window->ShouldClose())
     {
+		while (total_cycles < 4919808)
+		{
             ee->Clock(32);
             bus->Clock();
 
             total_cycles += 32;
+
+			if (!vblank_started && total_cycles >= 4498432)
+			{
+				vblank_started = true;
+				bus->GetGS()->GetCSR().vsint = true;
+
+				bus->GetGS()->GetCSR().field = !bus->GetGS()->GetCSR().field;
+
+				if (!(bus->GetGS()->GetIMR() & 0x800))
+					bus->trigger(0);
+				
+				bus->trigger(2);
+				//bus->GetBus()->TriggerInterrupt(0);
+			}
+
+
+		}
+
+		//bus->GetBus()->TriggerInterrupt(11);
+		bus->trigger(3);
+		vblank_started = false;
+		total_cycles = 0;
+		bus->GetGS()->GetCSR().vsint = false;
     }
     return exit_code;
 }

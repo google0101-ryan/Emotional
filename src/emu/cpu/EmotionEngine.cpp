@@ -123,8 +123,8 @@ EmotionEngine::EmotionEngine(Bus *bus, VectorUnit *vu0)
     memset(regs, 0, sizeof(regs));
     pc = 0xBFC00000;
 
-	cop0.init_tlb();
-	tlb_map = cop0.get_vtlb_map();
+	// cop0.init_tlb();
+	// tlb_map = cop0.get_vtlb_map();
     
     next_instr = {};
     next_instr.full = bus->read<uint32_t>(pc);
@@ -163,8 +163,11 @@ void EmotionEngine::Clock(int cycles)
 
 		branch_taken = false;
 
+		if (instr.pc == 0x11acb8)
+			printf("main()\n");
+
 		// if ((pc & 0xffff) == 0x10b0)
-		// 	can_disassemble = true;
+		//can_disassemble = true;
 
 		if (pc & 0x3)
 		{
@@ -233,6 +236,9 @@ void EmotionEngine::Clock(int cycles)
 			case 0x14:
 				dsllv(instr);
 				break;
+			case 0x16:
+				dsrlv(instr);
+				break;
 			case 0x17:
 				dsrav(instr);
 				break;
@@ -248,8 +254,14 @@ void EmotionEngine::Clock(int cycles)
 			case 0x1b:
 				divu(instr);
 				break;
+			case 0x20:
+				add(instr);
+				break;
 			case 0x21:
 				addu(instr);
+				break;
+			case 0x22:
+				sub(instr);
 				break;
 			case 0x23:
 				subu(instr);
@@ -283,6 +295,9 @@ void EmotionEngine::Clock(int cycles)
 				break;
 			case 0x2f:
 				dsubu(instr);
+				break;
+			case 0x34:
+				teq(instr);
 				break;
 			case 0x38:
 				dsll(instr);
@@ -351,6 +366,7 @@ void EmotionEngine::Clock(int cycles)
 		case 0x07:
 			bgtz(instr);
 			break;
+		case 0x08: // TODO: Overflow detection
 		case 0x09:
 			addiu(instr);
 			break;
@@ -381,11 +397,36 @@ void EmotionEngine::Clock(int cycles)
 			case 0x04:
 				mtc0(instr);
 				break;
+			case 0x08:
+			{
+				uint8_t op = instr.r_type.rt;
+				const static bool likely[] = {false, false, true, true};
+    			const static bool op_true[] = {false, true, false, true};
+
+				int32_t offset = ((int16_t)instr.i_type.imm) << 2;
+
+				bool cond = false;
+
+				if (op_true[op])
+					cond = cop0.get_condition(bus);
+				else
+					cond = !cop0.get_condition(bus);
+				
+				if (cond)
+			        pc = instr.pc + 4 + offset;
+				else if (likely)
+					fetch_next();
+
+				break;
+			}
 			case 0x10:
 				switch (instr.r_type.func)
 				{
 				case 0x02:
 					tlbwi(instr);
+					break;
+				case 0x06:
+				case 0x08:
 					break;
 				case 0x18:
 					eret(instr);
@@ -410,6 +451,9 @@ void EmotionEngine::Clock(int cycles)
 		{
 			switch (instr.r_type.rs)
 			{
+			case 0x00:
+				mfc1(instr);
+				break;
 			case 0x02:
 				cfc1(instr);
 				break;
@@ -419,9 +463,59 @@ void EmotionEngine::Clock(int cycles)
 			case 0x06:
 				ctc1(instr);
 				break;
-			case 0x10:
+			case 0x08:
 				bc(instr);
 				break;
+			case 0x10:
+			{
+				switch (instr.r_type.func)
+				{
+				case 0x00:
+					add_s(instr);
+					break;
+				case 0x01:
+					sub_s(instr);
+					break;
+				case 0x02:
+					mul_s(instr);
+					break;
+				case 0x03:
+					div_s(instr);
+					break;
+				case 0x06:
+					mov_s(instr);
+					break;
+				case 0x07:
+					neg_s(instr);
+					break;
+				case 0x18:
+					adda_s(instr);
+					break;
+				case 0x1c:
+					madd_s(instr);
+					break;
+				case 0x24:
+					cvt_w_s(instr);
+					break;
+				default:
+					printf("Unknown FPU.S instruction 0x%02x\n", instr.r_type.func);
+					Application::Exit(1);
+				}
+				break;
+			}
+			case 0x14:
+			{
+				switch (instr.r_type.func)
+				{
+				case 0x20:
+					cvt_s_w(instr);
+					break;
+				default:
+					printf("Unknown FPU.W instruction 0x%02x\n", instr.r_type.func);
+					Application::Exit(1);
+				}
+				break;
+			}
 			default:
 				printf("[emu/CPU]: %s: Unknown cop1 instruction 0x%02x (0x%08x)\n", __FUNCTION__, instr.r_type.rs, instr.full);
 				Application::Exit(1);
@@ -473,6 +567,9 @@ void EmotionEngine::Clock(int cycles)
 		{
 			switch (instr.r_type.func)
 			{
+			case 0x00:
+				madd(instr);
+				break;
 			case 0x04:
 				plzcw(instr);
 				break;
@@ -496,6 +593,9 @@ void EmotionEngine::Clock(int cycles)
 				break;
 			case 0x18:
 				mult1(instr);
+				break;
+			case 0x1a:
+				div1(instr);
 				break;
 			case 0x1b:
 				divu1(instr);
@@ -538,6 +638,9 @@ void EmotionEngine::Clock(int cycles)
 				}
 				break;
 			}
+			case 0x30:
+				pmfhl(instr);
+				break;
 			default:
 				printf("[emu/CPU]: %s: Unknown mmi 0x%08x (0x%02x)\n", __FUNCTION__, instr.full, instr.r_type.func);
 				Application::Exit(1);
@@ -603,6 +706,9 @@ void EmotionEngine::Clock(int cycles)
 		case 0x31:
 			lwc1(instr);
 			break;
+		case 0x36:
+			lqc2(instr);
+			break;
 		case 0x37:
 			ld(instr);
 			break;
@@ -621,11 +727,12 @@ void EmotionEngine::Clock(int cycles)
         }
         
         cycles_to_execute--;
+		cop0.cop0_regs[9]++;
     }
-	
-    cop0.cop0_regs[9] += cycles + std::abs(cycles_to_execute);
 
     regs[0].u64[0] = regs[0].u64[1] = 0;
+
+	bus->GetTimers()->tick(cycles / 2);
 
 	if (int_pending())
 	{
@@ -641,7 +748,7 @@ void EmotionEngine::Dump()
     for (int i = 0; i < 32; i++)
         printf("[emu/CPU]: %s: %s\t->\t%s\n", __FUNCTION__, Reg(i), print_128(regs[i]));
     for (int i = 0; i < 32; i++)
-        printf("[emu/CPU]: %s: f%d\t->\t%0.2f\n", __FUNCTION__, i, cop1.regs.f[i]);
+        printf("[emu/CPU]: %s: f%d\t->\t%0.2f (0x%08x)\n", __FUNCTION__, i, cop1.regs.f[i], cop1.regs.u[i]);
     printf("[emu/CPU]: %s: pc\t->\t0x%08x\n", __FUNCTION__, instr.pc);
     printf("[emu/CPU]: %s: hi\t->\t0x%08lx\n", __FUNCTION__, hi);
     printf("[emu/CPU]: %s: lo\t->\t0x%08lx\n", __FUNCTION__, lo);

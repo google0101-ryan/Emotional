@@ -5,32 +5,46 @@
 #include <cstdlib>
 #include <queue>
 #include <util/uint128.h>
-
-union GIFTag
-{
-    uint64_t regs : 64,
-    nregs : 4,
-    format : 2,
-    prim_en : 1,
-    prim_data : 11,
-    unused1 : 30,
-    eop : 1,
-    nloop : 15;
-};
+#include <emu/gs/gs.h>
 
 // Graphics InterFace, used for unpacking DMA transfers and uploading them
 // to the GS
 class GIF
 {
 private:
-    int data_count = 0;
-    int reg_count = 0;
+	union GIFTag
+	{
+		__uint128_t value;
+		struct
+		{
+			__uint128_t nloop : 15;
+			__uint128_t eop : 1;
+			__uint128_t : 30;
+			__uint128_t pre : 1;
+			__uint128_t prim : 11;
+			__uint128_t flg : 2;
+			__uint128_t nreg : 4;
+			__uint128_t regs : 64;
+		};
+	};
+
+
+	int data_left = 0;
+	int regs_left = 0;
+	int regs_count = 0;
     uint32_t gif_ctrl;
     std::queue<uint128_t> fifo;
     GIFTag tag;
+
+	float internal_Q;
+
+	GraphicsSynthesizer* gpu;
 public:
+	GIF(GraphicsSynthesizer* gs);
+
     void tick(int cycles);
     void process_packed(uint128_t qword);
+	void process_reglist(uint128_t qword);
 
     uint32_t read32(uint32_t addr)
     {

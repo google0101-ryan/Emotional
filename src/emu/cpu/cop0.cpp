@@ -118,6 +118,13 @@ void EmotionEngine::COP0::set_tlb(int index)
 	map_tlb(new_entry);
 }
 
+bool EmotionEngine::COP0::get_condition(Bus * bus)
+{
+	uint32_t stat = bus->read<uint32_t>(0x1000E010) & 0x3FF;
+	uint32_t pcr = bus->read<uint32_t>(0x1000E020) & 0x3FF;
+	return ((~pcr | stat) & 0x3FF) == 0x3FF;
+}
+
 void EmotionEngine::COP0::unmap_tlb(TLB_Entry* entry)
 {
 	uint32_t real_vpn = entry->vpn2 * 2;
@@ -195,9 +202,7 @@ void EmotionEngine::COP0::map_tlb(TLB_Entry *entry)
     {
         if (entry->valid[0])
         {
-			printf("Mapping even page at 0x%08x\n", even_virt_addr);
-
-            for (uint32_t i = 0; i < entry->page_size; i += 4096)
+			for (uint32_t i = 0; i < entry->page_size; i += 4096)
             {
                 int map_index = i / 4096;
                 uint8_t* mem = get_mem_pointer(even_phy_addr + i);
@@ -218,9 +223,7 @@ void EmotionEngine::COP0::map_tlb(TLB_Entry *entry)
 
         if (entry->valid[1])
         {
-			printf("Mapping odd page at 0x%08x\n", even_virt_addr);
-    
-	        for (uint32_t i = 0; i < entry->page_size; i += 4096)
+			for (uint32_t i = 0; i < entry->page_size; i += 4096)
             {
                 int map_index = i / 4096;
                 uint8_t* mem = get_mem_pointer(odd_phy_addr + i);

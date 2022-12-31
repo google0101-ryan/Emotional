@@ -95,7 +95,7 @@ uint32_t EmotionDma::read_dma(uint32_t addr)
     uint32_t offset = (addr >> 4) & 0xf;
 	auto ptr = (uint32_t*)&globals + offset;
 	
-	printf("[emu/DMAC]: Reading %s (0x%08x)\n", GLOBALS[offset], *ptr);
+	//printf("[emu/DMAC]: Reading %s (0x%08x)\n", GLOBALS[offset], *ptr);
 
 	return *ptr;
 }
@@ -135,6 +135,8 @@ void EmotionDma::tick(int cycles)
 						auto gif = bus->GetGIF();
 						uint128_t qword;
 						qword.u128 = *(__uint128_t*)&bus->grab_ee_ram()[channel.address];
+
+						printf("[emu/DMAC]: Transferring GIF qword 0x%lx%016lx\n", qword.u64[1], qword.u64[0]);
 						
 						gif->write32(0x10006000, qword);
 						channel.qword_count--;
@@ -244,6 +246,35 @@ void EmotionDma::fetch_tag(int id)
 
 	switch (id)
 	{
+	case CHANNELS::GIF:
+	{
+		auto gif = bus->GetGIF();
+		auto address = channel.tag_address.address;
+
+		tag.value = *(__uint128_t*)&bus->grab_ee_ram()[address];
+
+		printf("[emu/DMAC]: New GIF transfer: %d qwords\n", tag.qwords);
+
+		channel.qword_count = tag.qwords;
+		channel.control.tag = (tag.value >> 16) & 0xffff;
+
+		uint16_t tag_id = tag.id;
+		switch (tag_id)
+		{
+		case DMASourceID::CNT:
+			channel.address = channel.tag_address.address + 16;
+			channel.tag_address.value = channel.address + channel.qword_count * 16;
+			break;
+		default:
+			printf("Unknown DMA tag id %d\n", tag_id);
+			exit(1);
+		}
+
+		if (channel.control.enable_irq_bit && tag.irq)
+			channel.end_transfer = true;
+
+		break;
+	}
 	case CHANNELS::SIF0:
 	{
 		auto sif = bus->GetSif();
@@ -326,7 +357,7 @@ uint32_t EmotionDma::read(uint32_t addr)
 	uint32_t offset = (addr >> 4) & 0xf;
 	auto ptr = (uint32_t*)&channels[channel] + offset;
 
-	printf("[emu/DMAC]: Reading %s from channel %d\n", REGS[offset], channel);
+	//printf("[emu/DMAC]: Reading %s from channel %d\n", REGS[offset], channel);
 
 	return *ptr;
 }

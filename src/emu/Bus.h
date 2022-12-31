@@ -41,6 +41,8 @@ private:
 	EmotionEngine* cpu;
 
 	std::string elf_name;
+
+	bool fastboot = false;
 public:
     static uint32_t Translate(uint32_t addr)
     {
@@ -66,7 +68,7 @@ public:
 		return addr;
     }
 
-    Bus(std::string biosName, std::string elf, bool& success);
+    Bus(std::string biosName, std::string elf, bool& success, Renderer* renderer);
 
 	void LoadElf();
 
@@ -87,6 +89,8 @@ public:
 	uint8_t* grab_ee_ram() {return ram;}
 	uint8_t* grab_ee_bios() {return bios;}
 	uint8_t* grab_ee_spr() {return scratchpad;}
+
+	void trigger(uint32_t intr);
 
     template<typename T>
     T read_iop(uint32_t addr)
@@ -129,6 +133,8 @@ public:
             return (T)sif->read(addr);
         else if (addr >= 0x12000000 && addr <= 0x12002000)
 			return (T)gs->read32(addr);
+        else if (addr >= 0x10000000 && addr <= 0x10001830)
+			return (T)ee_timers->read(addr);
 
         switch (addr)
         {
@@ -141,6 +147,7 @@ public:
         case 0x1000f400:
         case 0x1000f410:
         case 0x1000f430:
+        case 0x1000f480:
             return 0;
         case 0x1000f440: /* Read from MCH_RICM */
         {
@@ -167,12 +174,21 @@ public:
             }
             return 0;
         }
+        case 0x1f803204:
         case 0x1f80141c:
         case 0x1f803800:
-            return 0;
+		case 0x1f80146e:
+			return 0;
 		case 0x1000F520:
 			return ee_dmac->read_enabler();
+		case 0x1A000006:
+			return 1;
         }
+
+		if ((addr & 0xFF000000) == 0x1A000000)
+		{
+			return 0;
+		}
         
         printf("[emu/Bus]: %s: Failed to read from address 0x%08x\n", __FUNCTION__, addr);
         exit(1);
@@ -298,6 +314,15 @@ public:
         case 0x1000f480:
         case 0x1000f490:
         case 0x1000f510:
+        case 0x1A000000:
+        case 0x1A000002:
+        case 0x1A000004:
+        case 0x1A000006:
+        case 0x1A00000C:
+        case 0x1A000010:
+        case 0x1A000012:
+        case 0x1A000014:
+        case 0x1A00001C:
             return;
         case 0x1000f180:
             console << (char)data;
@@ -340,6 +365,10 @@ public:
     IopBus* GetBus() {return iop_bus;}
 	VectorInterface* GetVIF(int id) {if (id) return vif1; else return vif0;}
 	GIF* GetGIF() {return gif;}
+	GraphicsSynthesizer* GetGS() {return gs;}
+	EmotionTimers* GetTimers() {return ee_timers;}
+
+	void FastBoot();
 
     void Dump();
 };

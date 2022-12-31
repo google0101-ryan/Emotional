@@ -169,6 +169,8 @@ private:
 		void set_tlb_modified(size_t page);
 
 		void set_tlb(int index);
+
+		bool get_condition(Bus* bus);
 	} cop0;
 
 	uint8_t** tlb_map;
@@ -268,6 +270,7 @@ private:
     void sdr(Opcode i); // 0x2D
 	void swr(Opcode i); // 0x2E
 	void lwc1(Opcode i); // 0x31
+	void lqc2(Opcode i); // 0x36
     void ld(Opcode i); // 0x37
     void swc1(Opcode i); // 0x39
 	void sqc2(Opcode i); // 0x3E
@@ -289,12 +292,15 @@ private:
     void mflo(Opcode i); // 0x12
 	void mtlo(Opcode i); // 0x13
     void dsllv(Opcode i); // 0x14
+	void dsrlv(Opcode i); // 0x14
     void dsrav(Opcode i); // 0x17
     void mult(Opcode i); // 0x18
 	void multu(Opcode i); // 0x19
     void div(Opcode i); // 0x1A
     void divu(Opcode i); // 0x1B
+	void add(Opcode i); // 0x20
     void addu(Opcode i); // 0x21
+	void sub(Opcode i); // 0x22
     void subu(Opcode i); // 0x23
     void op_and(Opcode i); // 0x24
     void op_or(Opcode i); // 0x25
@@ -306,6 +312,7 @@ private:
     void sltu(Opcode i); // 0x2b
     void daddu(Opcode i); // 0x2d
 	void dsubu(Opcode i); // 0x2f
+	void teq(Opcode i); // 0x34
     void dsll(Opcode i); // 0x38
     void dsrl(Opcode i); // 0x3a
 	void dsra(Opcode i); // 0x3b
@@ -324,6 +331,7 @@ private:
 
     // mmi
 
+	void madd(Opcode i); // 0x00
 	void plzcw(Opcode i); // 0x04
 	void paddb(Opcode i); // 0x08
 	void psubb(Opcode i); // 0x09
@@ -332,7 +340,10 @@ private:
     void mflo1(Opcode i); // 0x12
 	void mtlo1(Opcode i); // 0x13
     void mult1(Opcode i); // 0x18
+	void div1(Opcode i); // 0x1a
     void divu1(Opcode i); // 0x1b
+	void pmfhl(Opcode i); // 0x30
+	void pmfhllw(Opcode i); // 0x30 0x00
 
 	// mmi1
 	void padduw(Opcode i);
@@ -351,6 +362,7 @@ private:
     void mtc1(Opcode i);
 	void ctc1(Opcode i);
 	void cfc1(Opcode i);
+	void cvt_s_w(Opcode i);
 
 	// cop1.bc1
 	void bc(Opcode i);
@@ -363,6 +375,17 @@ private:
 	void qmtc2(Opcode i);
 	void cfc2(Opcode i);
 	void ctc2(Opcode i);
+
+	// FPU.S
+	void add_s(Opcode i); // 0x00
+	void sub_s(Opcode i); // 0x01
+	void mul_s(Opcode i); // 0x02
+	void div_s(Opcode i); // 0x03
+	void mov_s(Opcode i); // 0x06
+	void neg_s(Opcode i); // 0x07
+	void adda_s(Opcode i); // 0x18
+	void madd_s(Opcode i); // 0x1C
+	void cvt_w_s(Opcode i); // 0x24
 
     const char* Reg(int index)
     {
@@ -615,6 +638,14 @@ public:
 	void ClearINT1()
 	{
 		cop0.cop0_regs[13] &= ~(1 << 11);
+	}
+
+	void TriggerInt0(bool int0)
+	{
+		if (int0)
+			cop0.cop0_regs[13] |= (1 << 10);
+		else
+			cop0.cop0_regs[13] &= ~(1 << 10);
 	}
 
     void Clock(int cycles);

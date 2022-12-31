@@ -1,79 +1,114 @@
 #include <emu/gs/gif.h>
+#include "gif.h"
 
 void GIF::process_packed(uint128_t qword)
 {
-    int curr_reg = tag.nregs - reg_count;
-    uint64_t regs = tag.regs;
-    uint32_t desc = (regs >> 4 * curr_reg) & 0xf;
+	uint64_t reg_offset = (regs_count - regs_left) << 2;
+	uint8_t reg = (tag.regs >> reg_offset) & 0xf;
 
-    switch (desc)
-    {
-    case 0:
-        printf("PRIM: Write 0x%08lx\n", (uint64_t)(qword.u128 & 0x7ff));
-        break;
-    case 1:
-        printf("rgba: %d, %d, %d, %d\n", (uint8_t)qword.u128 & 0xFF, (uint8_t)(qword.u128 >> 32) & 0xFF, (uint8_t)(qword.u128 >> 64) & 0xFF, (uint8_t)(qword.u128 >> 96) & 0xFF);
-        break;
-    case 2:
-        printf("stq\n");
-        break;
-    case 3:
-        printf("uv\n");
-        break;
-    case 4:
-        printf("%s\n", (qword.u128 >> 111) & 1 ? "xyz3f" : "xyz2f");
-        break;
-    case 5:
+	switch (reg)
 	{
-		float x = (qword.u128 & 0xFFFF);
-		float y = ((qword.u128 >> 32) & 0xFFFF);
-		float z = ((qword.u128 >> 96) & 0xFFFF);
-        printf("%s (%0.2f, %0.2f, %0.2f)\n", (qword.u128 >> 111) & 1 ? "xyz3" : "xyz2", x, y, z);
-        break;
+	case 0x00:
+		gpu->prim = (qword.u64[0] & 0x7FF);
+		break;
+	case 0x0D:
+		gpu->write(0x0D, qword.u128 & 0x7FF);
+		break;
+	case 0x0E:
+	{
+		uint8_t addr = (qword.u128 >> 64) & 0xFF;
+		uint64_t data = (qword.u128 & UINT64_MAX);
+		gpu->write(addr, data);
+		break;
 	}
-    case 10:
-        printf("fog\n");
-        break;
-    case 14:
-        printf("A+D\n");
-        break;
-    case 15:
-        printf("GIF nop\n");
-        break;
-    }
+	default:
+		gpu->write(reg, qword.u64[0]);
+		break;
+	}
+}
 
-    reg_count--;
+void GIF::process_reglist(uint128_t qword)
+{
+	for (int i = 0; i < 2; i++)
+	{
+		uint64_t reg_offset = (regs_count - regs_left) << 2;
+		uint8_t reg = (tag.regs >> reg_offset) & 0xf;
+
+		if (reg != 0xE)
+			gpu->write(reg, qword.u64[i]);
+		
+		regs_left--;
+		if (!regs_left)
+		{
+			regs_left = regs_count;
+			data_left--;
+
+			if (!data_left && i == 0)
+				return;
+		}
+	}
+}
+
+GIF::GIF(GraphicsSynthesizer *gs)
+{
+	gpu = gs;
 }
 
 void GIF::tick(int cycles)
 {
+	while (!fifo.empty() && cycles--)
+	{
+		if (!data_left)
+		{
+			auto qword = fifo.front();
+			fifo.pop();
+			
+			tag.value = qword.u128;
 
-    while (!fifo.empty() && cycles--)
-    {
-        if (!data_count)
-        {
-            tag = *(GIFTag*)&fifo.front();
-            fifo.pop();
+			printf("[emu/GIF]: Processing GIF packet NLOOP: %d, EOP: %d, PRIM_EN: %d, PRIM: 0x%08lx, FORMAT: %d, NREGS: %d, REGS: 0x%08lx\n", tag.nloop, tag.eop, tag.pre, tag.prim, tag.flg, tag.nreg, tag.regs);
 
-            data_count = tag.nloop;
-            reg_count = tag.nregs;
-        }
-        else
-        {
-            uint128_t qword = fifo.front();
-            fifo.pop();
+			if (tag.pre)
+				gpu->prim = tag.prim;
+			
+			data_left = tag.nloop;
+			regs_left = regs_count = tag.nreg;
 
-            switch (tag.format)
-            {
-            case 0:
-                process_packed(qword);
-                if (!reg_count)
-                {
-                    data_count--;
-                    reg_count = tag.nregs;
-                }
-                break;
-            }
-        }
-    }
+			internal_Q = 1.0f;
+
+			if (data_left != 0)
+			{
+				gpu->priv_regs.csr.fifo = 2;
+			}
+		}
+		else
+		{
+			switch (tag.flg)
+			{
+			case 0:
+				process_packed(fifo.front());
+				fifo.pop();
+				regs_left--;
+				if (!regs_left)
+				{
+					regs_left = regs_count;
+					data_left--;
+				}
+				break;
+			case 1:
+				process_reglist(fifo.front());
+				fifo.pop();
+				break;
+			case 2:
+				data_left--;
+				break;
+			default:
+				printf("Unknown GIF tag format %d\n", tag.flg);
+				exit(1);
+			}
+		}
+		if (!data_left && tag.eop)
+		{
+			gpu->priv_regs.csr.fifo = 1;
+		}
+	}
 }

@@ -2,6 +2,7 @@
 
 #include <emu/Bus.h>
 #include <emu/cpu/EmotionEngine.h>
+#include <app/opengl/window.h>
 
 class Application
 {
@@ -11,6 +12,8 @@ private:
 
     static Bus* bus;
     static EmotionEngine* ee;
+
+	static Window* window;
 public:
     static bool Init(int argc, char** argv);
     static int Run();

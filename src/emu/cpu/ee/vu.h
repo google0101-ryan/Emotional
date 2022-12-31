@@ -21,7 +21,7 @@ private:
         float f[4];
         uint32_t u[4];
         int32_t s[4];
-    } gpr[32];
+    } gpr[32], ACC;
 
     union
     {
@@ -41,6 +41,8 @@ private:
 public:
     VectorUnit(int id) : id(id) {}
     void Dump();
+
+	float update_mac_flags(float value, int index);
 
     template<typename T> T read_data(uint32_t addr)
     {

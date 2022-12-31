@@ -5,7 +5,7 @@
 #include "Bus.h"
 #include <emu/cpu/EmotionEngine.h>
 
-Bus::Bus(std::string fileName, std::string elf, bool& s)
+Bus::Bus(std::string fileName, std::string elf, bool& s, Renderer* renderer)
 {
 	this->elf_name = elf;
     std::ifstream file(fileName, std::ios::binary | std::ios::ate);
@@ -33,9 +33,9 @@ Bus::Bus(std::string fileName, std::string elf, bool& s)
     
 	console.open("log.txt");
 
-    gif = new GIF();
-    gs = new GraphicsSynthesizer();
-    ee_timers = new EmotionTimers();
+    gs = new GraphicsSynthesizer(renderer);
+    gif = new GIF(gs);
+    ee_timers = new EmotionTimers(this);
     ee_dmac = new EmotionDma(this);
     vu0 = new VectorUnit(0);
     vu1 = new VectorUnit(1);
@@ -53,6 +53,9 @@ Bus::Bus(std::string fileName, std::string elf, bool& s)
 
 void Bus::LoadElf()
 {
+	if (!fastboot)
+		return;
+
 	struct Elf32_Ehdr 
     {
 		uint8_t  e_ident[16];
@@ -127,6 +130,8 @@ void Bus::LoadElf()
 
 			cpu->JumpToEntry(header.e_entry);
 		}
+
+		delete[] buffer;
 	}
 }
 
@@ -142,6 +147,12 @@ void Bus::Clock()
     iop_bus->GetIopDma()->tick(4);
 }
 
+void Bus::trigger(uint32_t intr)
+{
+	intc_stat |= (1 << intr);
+	cpu->TriggerInt0(intc_stat & intc_mask);
+}
+
 void Bus::TriggerDMAInterrupt()
 {
 	cpu->SetINT1();
@@ -150,6 +161,11 @@ void Bus::TriggerDMAInterrupt()
 void Bus::ClearDMAInterrupt()
 {
 	cpu->ClearINT1();
+}
+
+void Bus::FastBoot()
+{
+	fastboot = true;
 }
 
 void Bus::Dump()

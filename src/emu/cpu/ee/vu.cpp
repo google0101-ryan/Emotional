@@ -1,6 +1,7 @@
 #include <emu/cpu/ee/vu.h>
 #include <app/Application.h>
 #include <fstream>
+#include "vu.h"
 
 #define _x(f) f&8
 #define _y(f) f&4
@@ -85,6 +86,9 @@ void VectorUnit::special1(Opcode i)
         uint16_t op = (i.full & 0x3) | ((i.full >> 4) & 0x7C);
         switch (op)
         {
+		case 0x18:
+		{
+		}
 		case 0x31:
 		{
 			uint32_t x = gpr[_fs_].u[0];
@@ -150,7 +154,7 @@ void VectorUnit::Dump()
     for (int i = 0; i < 32; i++)
     {
         printf("r%d:", i);
-        for (int j = 0; j < 4; j++) printf(" %d -> %0.2f", j, convert(gpr[i].f[j]));
+        for (int j = 0; j < 4; j++) printf(" %d -> %0.2f (0x%08x)", j, gpr[i].f[j], gpr[i].u[j]);
         printf("\n");
     }
 
