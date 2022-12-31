@@ -3,17 +3,60 @@
 
 void GIF::process_packed(uint128_t qword)
 {
-	uint64_t reg_offset = (regs_count - regs_left) << 2;
-	uint8_t reg = (tag.regs >> reg_offset) & 0xf;
+	int curr_reg = tag.nreg - regs_left;
+	uint64_t regs = tag.regs;
+	uint32_t desc = (regs >> 4 * curr_reg) & 0xf;
 
-	switch (reg)
+	printf("[emu/GIF]: PACKED write to 0x%08x\n", desc);
+
+	switch (desc)
 	{
 	case 0x00:
 		gpu->prim = (qword.u64[0] & 0x7FF);
 		break;
-	case 0x0D:
-		gpu->write(0x0D, qword.u128 & 0x7FF);
+	case 0x01:
+	{
+		GraphicsSynthesizer::RGBAQReg target;
+		target.r = qword.u128 & 0xff;
+		target.g = (qword.u128 >> 32) & 0xff;
+		target.b = (qword.u128 >> 64) & 0xff;
+		target.a = (qword.u128 >> 96) & 0xff;
+		
+		gpu->write(0x1, target.value);
 		break;
+	}
+	case 0x02:
+	{
+		gpu->write(0x2, qword.u64[0]);
+		internal_Q = qword.u64[1];
+		break;
+	}
+	case 0x04:
+	{
+		bool disable_draw = (qword.u128 >> 111) & 1;
+		auto address = disable_draw ? 0xc : 0x4;
+
+		GraphicsSynthesizer::XYZF target;
+		target.x = qword.u128 & 0xffff;
+		target.y = (qword.u128 >> 32) & 0xffff;
+		target.z = (qword.u128 >> 68) & 0xffffff;
+		target.f = (qword.u128 >> 100) & 0xff;
+
+		gpu->write(address, target.value);
+		break;
+	}
+	case 0x05:
+	{
+		bool disable_draw = (qword.u128 >> 111) & 1;
+		auto address = disable_draw ? 0xd : 0x5;
+
+		GraphicsSynthesizer::XYZ target;
+		target.x = qword.u128 & 0xffff;
+		target.y = (qword.u128 >> 32) & 0xffff;
+		target.z = (qword.u128 >> 64) & 0xffffffff;
+
+		gpu->write(address, target.value);
+	}
 	case 0x0E:
 	{
 		uint8_t addr = (qword.u128 >> 64) & 0xFF;
@@ -21,9 +64,18 @@ void GIF::process_packed(uint128_t qword)
 		gpu->write(addr, data);
 		break;
 	}
-	default:
-		gpu->write(reg, qword.u64[0]);
+	case 0x0F:
 		break;
+	default:
+		gpu->write(desc, qword.u64[0]);
+		break;
+	}
+
+	regs_left--;
+	if (!regs_left)
+	{
+		regs_left = regs_count;
+		data_left--;
 	}
 }
 
@@ -87,18 +139,16 @@ void GIF::tick(int cycles)
 			case 0:
 				process_packed(fifo.front());
 				fifo.pop();
-				regs_left--;
-				if (!regs_left)
-				{
-					regs_left = regs_count;
-					data_left--;
-				}
 				break;
 			case 1:
 				process_reglist(fifo.front());
 				fifo.pop();
 				break;
 			case 2:
+				printf("Transfering quad-word to VRAM\n");
+				gpu->write_hwreg(fifo.front().u64[0]);
+				gpu->write_hwreg(fifo.front().u64[1]);
+				fifo.pop();
 				data_left--;
 				break;
 			default:

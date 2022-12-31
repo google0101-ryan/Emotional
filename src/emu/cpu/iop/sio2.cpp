@@ -32,7 +32,7 @@ void SIO2::process_command(uint8_t cmd)
 		fifo.push(0x00);
 		return;
 	default:
-		printf("Sending unknown command 0x%02x\n", (uint8_t)cur_dev);
+		printf("[emu/IOP]: Sending unknown command 0x%02x\n", (uint8_t)cur_dev);
 		exit(1);
 	}
 }

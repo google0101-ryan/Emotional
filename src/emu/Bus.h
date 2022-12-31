@@ -68,7 +68,7 @@ public:
 		return addr;
     }
 
-    Bus(std::string biosName, std::string elf, bool& success, Renderer* renderer);
+    Bus(std::string biosName, std::string elf, bool& success);
 
 	void LoadElf();
 

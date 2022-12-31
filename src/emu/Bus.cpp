@@ -5,7 +5,7 @@
 #include "Bus.h"
 #include <emu/cpu/EmotionEngine.h>
 
-Bus::Bus(std::string fileName, std::string elf, bool& s, Renderer* renderer)
+Bus::Bus(std::string fileName, std::string elf, bool& s)
 {
 	this->elf_name = elf;
     std::ifstream file(fileName, std::ios::binary | std::ios::ate);
@@ -33,7 +33,7 @@ Bus::Bus(std::string fileName, std::string elf, bool& s, Renderer* renderer)
     
 	console.open("log.txt");
 
-    gs = new GraphicsSynthesizer(renderer);
+    gs = new GraphicsSynthesizer();
     gif = new GIF(gs);
     ee_timers = new EmotionTimers(this);
     ee_dmac = new EmotionDma(this);

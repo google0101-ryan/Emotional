@@ -4,8 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <queue>
-#include <app/opengl/common.h>
-#include <app/opengl/renderer.h>
+#include <3party/opengl.h>
 
 class GraphicsSynthesizer
 {
@@ -200,17 +199,62 @@ public:
 
 	GSPRegs priv_regs;
 
-	std::queue<Vertex> vqueue = {};
+	struct Vertex
+	{
+		OpenGL::vec3 coords;
+		OpenGL::uvec4 col;
+	};
+	
+	std::vector<Vertex> vqueue = {};
 
-	void submit_vertex(XYZ xyz, bool draw_kick);
-	void submit_vertex_fog(XYZF xyzf, bool draw_kick);
-	void process_vertex(Vertex vertex, bool draw_kick);
+	OpenGL::Framebuffer fb;
 
-	Renderer* renderer;
+	OpenGL::VertexArray vao;
+	OpenGL::VertexBuffer vbo;
+	OpenGL::Shader vertex_shader;
+	OpenGL::Shader fragment_shader;
+	OpenGL::Program shader_program;
+
+	int vram_transfer_pixels;
+
+	GLint offset_location;
+
+	const char* vertex_shader_source = R"(
+	#version 330 core
+	layout(location = 0) in vec3 pos;
+	layout(location = 1) in uvec4 col;
+
+	uniform vec2 offsets = vec2(0.0f, 0.0f);
+	
+	out vec4 vertex_col;
+	
+	void main() {
+		gl_Position = vec4(((pos.xy - offsets.xy) / 16.f) / 256.f - 1.f, 0.f, 1.f);
+		vertex_col = vec4(float(col.r) / 255.f, float(col.g) / 255.f, float(col.b) / 255.f, 1.f);
+	}
+	)";
+
+	const char* fragment_shader_source = R"(
+	#version 330 core
+	in vec4 vertex_col;
+	
+	out vec4 colour_final;
+	
+	void main() {
+		colour_final = vertex_col;
+	}
+	)";
+
+	std::vector<uint32_t> transfer_buf;
+
+	void process_vertex(uint64_t data, bool draw_kick);
+	void process_vertex_f(uint64_t data, bool draw_kick);
 public:
-	GraphicsSynthesizer(Renderer* renderer);
+	OpenGL::Texture vram;
+	GraphicsSynthesizer();
 
 	void write(uint16_t index, uint64_t data);
+	void write_hwreg(uint64_t data);
 
 	uint64_t read32(uint32_t addr)
 	{

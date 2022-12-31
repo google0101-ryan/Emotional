@@ -7,7 +7,6 @@ int Application::exit_code = 0;
 
 Bus* Application::bus = nullptr;
 EmotionEngine* Application::ee = nullptr;
-Window* Application::window = nullptr;
 
 void Sig(int)
 {
@@ -15,23 +14,38 @@ void Sig(int)
     Application::Exit();
 }
 
+SDL_Window* window;
+SDL_GLContext context;
+
 bool Application::Init(int argc, char** argv)
 {
+	SDL_Init(SDL_INIT_EVERYTHING);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+
+	window = SDL_CreateWindow("Yay, Playstation", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+	context = SDL_GL_CreateContext(window);
+
+	if (gl3wInit())
+	{
+		printf("GL3W initialization error\n");
+		exit(1);
+	}
+
+	glEnable(GL_DEPTH_TEST);
+
     if (argc < 3)
     {
         printf("Usage: %s [bios] [elf] --fast-boot\n", argv[0]);
         return false;
     }
 
-	window = new Window();
-	Renderer* renderer = new Renderer();
-	window->AttachRenderer(renderer);
-
     bool success = false;
 
     printf("[app/App]: %s: Initializing Bus\n", __FUNCTION__);
 
-    bus = new Bus(argv[1], argv[2], success, renderer);
+    bus = new Bus(argv[1], argv[2], success);
 
 	if (argc >= 4)
 	{
@@ -63,7 +77,8 @@ bool vblank_started = false;
 
 int Application::Run()
 {
-    while (isRunning && !window->ShouldClose())
+    uint8_t* out = new uint8_t[2048 * 2048 * 4];
+    while (isRunning)
     {
 		while (total_cycles < 4919808)
 		{
@@ -83,13 +98,21 @@ int Application::Run()
 					bus->trigger(0);
 				
 				bus->trigger(2);
-				//bus->GetBus()->TriggerInterrupt(0);
+				bus->GetBus()->TriggerInterrupt(0);
+
+				bus->GetGS()->vram.bind();
+				glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, out);
+
+				SDL_Surface* surface = SDL_CreateRGBSurfaceFrom(out, 2048, 2048, 8*4, 2048 * 4, 0xFF, 0xFF00, 0xFF0000, 0xFF000000);
+				SDL_Surface* window_surface = SDL_GetWindowSurface(window);
+				SDL_BlitSurface(surface, NULL, window_surface, NULL);
+				SDL_UpdateWindowSurface(window);
+
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 			}
-
-
 		}
 
-		//bus->GetBus()->TriggerInterrupt(11);
+		bus->GetBus()->TriggerInterrupt(11);
 		bus->trigger(3);
 		vblank_started = false;
 		total_cycles = 0;

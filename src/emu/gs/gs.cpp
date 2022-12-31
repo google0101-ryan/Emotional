@@ -1,88 +1,161 @@
 #include "gs.h"
 #include <cassert>
 
-void GraphicsSynthesizer::submit_vertex(XYZ xyz, bool draw_kick)
+void GraphicsSynthesizer::process_vertex(uint64_t data, bool draw_kick)
 {
-	Vertex vertex;
-	vertex.position = glm::vec3(xyz.x, xyz.y, xyz.z);
-	process_vertex(vertex, draw_kick);
-}
+	printf("Pushing vertex\n");
 
-void GraphicsSynthesizer::submit_vertex_fog(XYZF xyzf, bool draw_kick)
-{
-	Vertex vertex;
-	vertex.position = glm::vec3(xyzf.x, xyzf.y, xyzf.z);
-	process_vertex(vertex, draw_kick);
-}
+	Vertex v;
+	v.coords.x() = data & 0xffff;
+	v.coords.y() = (data >> 16) & 0xffff;
+	v.coords.z() = (data >> 32) & 0xffffffff;
 
-void GraphicsSynthesizer::process_vertex(Vertex vertex, bool draw_kick)
-{
-	auto& pos = vertex.position;
-	pos.x = (pos.x - xyoffset[0].x_offset) / 16.0f;
-	pos.y = (pos.y - xyoffset[0].y_offset) / 16.0f;
+	v.col.r() = rgbaq.r;
+	v.col.g() = rgbaq.g;
+	v.col.b() = rgbaq.b;
+	v.col.a() = rgbaq.a;
 
-	pos.x = (pos.x / 320.0f) - 1.0f;
-	pos.y = 1.0f - (pos.y / 112.0f);
-	pos.z = pos.z / static_cast<float>(INT_MAX);
-
-	vertex.color = glm::vec3(rgbaq.r, rgbaq.g, rgbaq.b) / 255.0f;
-
-	vqueue.push(vertex);
+	if (!draw_kick && vqueue.size() == 3)
+	{
+		vqueue.pop_back();
+	}
+	
+	vqueue.push_back(v);
 
 	if (draw_kick)
 	{
-		int size = 0;
-		switch (prim & 7)
+		if (vqueue.size() == 2 && (prim & 7) == 6)
 		{
-		case 0:
-			size = 1;
-			break;
-		case 1:
-		case 2:
-			size = 2;
-			break;
-		case 3:
-		case 4:
-		case 5:
-			size = 3;
-			break;
-		case 6:
-			size = 2;
-			break;
+			vqueue[0].coords.x() -= xyoffset[0].x_offset;
+			vqueue[1].coords.x() -= xyoffset[0].x_offset;
+			vqueue[0].coords.y() -= xyoffset[0].y_offset;
+			vqueue[1].coords.y() -= xyoffset[0].y_offset;
+
+			Vertex v3, v4;
+			v3.col = v4.col = vqueue[0].col;
+			v3.coords.x() = vqueue[1].coords.x();
+			v3.coords.y() = vqueue[0].coords.y();
+			v4.coords.x() = vqueue[0].coords.x();
+			v4.coords.y() = vqueue[1].coords.y();
+
+			Vertex attribs[] =
+			{
+				vqueue[0], v3, vqueue[1],
+				vqueue[1], v4, vqueue[0]
+			};
+
+			glBufferData(GL_ARRAY_BUFFER, sizeof(attribs), attribs, GL_STATIC_DRAW);
+			OpenGL::draw(OpenGL::Primitives::Triangle, 6);
+		
+			printf("Queued vertices (%f, %f), (%f, %f), (%f, %f), (%f, %f)\n", (vqueue[0].coords.x() / 16.0f) / 256.0f - 1.0f, (vqueue[0].coords.y() / 16.0f) / 256.0f - 1.0f, (vqueue[1].coords.x() / 16.0f) / 256.0f - 1.0f, (vqueue[1].coords.y() / 16.0f) / 256.0f - 1.0f, (v3.coords.x() / 16.0f) / 256.0f - 1.0f, (v3.coords.y() / 16.0f) / 256.0f - 1.0f, (v4.coords.x() / 16.0f) / 256.0f - 1.0f, (v4.coords.y() / 16.0f) / 256.0f - 1.0f);
+			printf("Normalized from (%f, %f) and (%f, %f)\n", vqueue[0].coords.x(), vqueue[0].coords.y(), vqueue[1].coords.x(), vqueue[1].coords.y());
+			vqueue.clear();
 		}
-
-		if (size && size <= vqueue.size())
+		else if (vqueue.size() == 3 && (prim & 7) == 3)
 		{
-			switch ((prim & 7))
-			{
-			case 6:
-			{
-				assert(vqueue.size() == 2);
-				auto& v1 = vqueue.front();
-				vqueue.pop();
-				auto& v2 = vqueue.front();
-				vqueue.pop();
-				Vertex v3 = v1;
-				v3.position.y = v2.position.y;
-				Vertex v4 = v2;
-				v4.position.x = v1.position.x;
+			vqueue[0].coords.x() -= xyoffset[0].x_offset;
+			vqueue[1].coords.x() -= xyoffset[0].x_offset;
+			vqueue[2].coords.x() -= xyoffset[0].x_offset;
+			vqueue[0].coords.y() -= xyoffset[0].y_offset;
+			vqueue[1].coords.y() -= xyoffset[0].y_offset;
+			vqueue[2].coords.y() -= xyoffset[0].y_offset;
 
-				printf("Pushing sprite at (%f, %f, %f), (%f, %f, %f)\n", v1.position.x, v1.position.y, v1.position.z, v2.position.x, v2.position.y, v2.position.z);
+			Vertex attribs[] =
+			{
+				vqueue[0], vqueue[1], vqueue[2]
+			};
 
-				renderer->vertices.emplace_back(v1);
-				renderer->vertices.emplace_back(v2);
-				renderer->vertices.emplace_back(v3);
-				renderer->vertices.emplace_back(v4);
-				break;
-			}
-			}
+			glBufferData(GL_ARRAY_BUFFER, sizeof(attribs), attribs, GL_STATIC_DRAW);
+			OpenGL::draw(OpenGL::Primitives::Triangle, 3);
+
+			vqueue.clear();
 		}
 	}
 }
 
-GraphicsSynthesizer::GraphicsSynthesizer(Renderer *renderer)
-: renderer(renderer)
+void GraphicsSynthesizer::process_vertex_f(uint64_t data, bool draw_kick)
 {
+	printf("Pushing vertex\n");
+
+	auto& xyz = draw_kick ? xyzf2 : xyzf3;
+
+	Vertex v;
+	v.coords.x() = xyz.x;
+	v.coords.y() = xyz.y;
+	v.coords.z() = xyz.z;
+
+	v.col.r() = rgbaq.r;
+	v.col.g() = rgbaq.g;
+	v.col.b() = rgbaq.b;
+	v.col.a() = rgbaq.a;
+	
+	if (!draw_kick && vqueue.size() == 3)
+	{
+		vqueue.pop_back();
+	}
+	
+	vqueue.push_back(v);
+
+	if (draw_kick)
+	{
+		if (vqueue.size() == 3 && (prim & 7) == 3)
+		{
+			// vqueue[0].coords.x() -= xyoffset[0].x_offset;
+			// vqueue[1].coords.x() -= xyoffset[0].x_offset;
+			// vqueue[2].coords.x() -= xyoffset[0].x_offset;
+			// vqueue[0].coords.y() -= xyoffset[0].y_offset;
+			// vqueue[1].coords.y() -= xyoffset[0].y_offset;
+			// vqueue[2].coords.y() -= xyoffset[0].y_offset;
+
+			Vertex attribs[] =
+			{
+				vqueue[0], vqueue[1], vqueue[2]
+			};
+
+			glBufferData(GL_ARRAY_BUFFER, sizeof(attribs), attribs, GL_STATIC_DRAW);
+			OpenGL::draw(OpenGL::Primitives::Triangle, 3);
+
+			vqueue.clear();
+		}
+	}
+}
+
+GraphicsSynthesizer::GraphicsSynthesizer()
+{
+	vram.create(2048, 2048, GL_RGB8);
+	fb.createWithTexture(vram);
+	fb.bind(OpenGL::FramebufferTypes::DrawAndReadFramebuffer);
+	OpenGL::setViewport(640, 480);
+
+	vbo.create();
+	vbo.bind();
+	vao.create();
+	vao.bind();
+
+	vao.setAttributeFloat<GLfloat>(0, 3, sizeof(Vertex), (void*)offsetof(Vertex, coords));
+	vao.enableAttribute(0);
+	vao.setAttributeInt<GLuint>(1, 4, sizeof(Vertex), (void*)offsetof(Vertex, col));
+	vao.enableAttribute(1);
+
+	if (!vertex_shader.create(vertex_shader_source, OpenGL::ShaderType::Vertex))
+	{
+		printf("Failed to compile vertex shader!\n");
+		exit(1);
+	}
+	if (!fragment_shader.create(fragment_shader_source, OpenGL::ShaderType::Fragment))
+	{
+		printf("Failed to compile fragment shader!\n");
+		exit(1);
+	}
+	if (!shader_program.create({vertex_shader, fragment_shader}))
+	{
+		printf("Failed to link shaders!\n");
+		exit(1);
+	}
+
+	shader_program.use();
+
+	offset_location = glGetUniformLocation(shader_program.handle(), "offsets");
 }
 
 void GraphicsSynthesizer::write(uint16_t index, uint64_t data)
@@ -104,11 +177,11 @@ void GraphicsSynthesizer::write(uint16_t index, uint64_t data)
 		break;
 	case 0x4:
 		xyzf2.value = data;
-		submit_vertex_fog(xyzf2, true);
+		process_vertex_f(data, true);
 		break;
 	case 0x5:
 		xyz2.value = data;
-		submit_vertex(xyz2, true);
+		process_vertex(data, true);
 		break;
 	case 0x6:
 	case 0x7:
@@ -121,9 +194,13 @@ void GraphicsSynthesizer::write(uint16_t index, uint64_t data)
 	case 0xA:
 		fog = data;
 		break;
+	case 0x0C:
+		xyzf3.value = data;
+		process_vertex_f(data, false);
+		break;
 	case 0xD:
 		xyz3.value = data;
-		submit_vertex(xyz3, false);
+		process_vertex(data, false);
 		break;
 	case 0x14:
 	case 0x15:
@@ -136,6 +213,7 @@ void GraphicsSynthesizer::write(uint16_t index, uint64_t data)
 	case 0x18:
 	case 0x19:
 		xyoffset[context].value = data;
+		glUniform2f(offset_location, (GLfloat)(xyoffset[context].x_offset), (GLfloat)(xyoffset[context].y_offset));
 		break;
 	case 0x1A:
 		prmodecont = data;
@@ -207,6 +285,7 @@ void GraphicsSynthesizer::write(uint16_t index, uint64_t data)
 		break;
 	case 0x52:
 		trxreg.value = data;
+		vram_transfer_pixels = trxreg.height * trxreg.width;
 		break;
 	case 0x53:
     {
@@ -214,6 +293,8 @@ void GraphicsSynthesizer::write(uint16_t index, uint64_t data)
 		data_written = 0;
         break;
 	}
+	case 0x60:
+		priv_regs.csr.signal = 1;
 	case 0x61:
 		priv_regs.csr.finish = 1;
 		break;
@@ -223,3 +304,16 @@ void GraphicsSynthesizer::write(uint16_t index, uint64_t data)
 	}
 }
 
+void GraphicsSynthesizer::write_hwreg(uint64_t data)
+{
+	vram_transfer_pixels--;
+	transfer_buf.push_back(data & 0xffffffff);
+	transfer_buf.push_back(data >> 32);
+	printf("%d bytes remaining on VRAM transfer\n", vram_transfer_pixels);
+	if (vram_transfer_pixels == 0)
+	{
+		vram.bind();
+		glTexSubImage2D(GL_TEXTURE_2D, 0, trxpos.dest_top_left_x, trxpos.dest_top_left_y, trxreg.width, trxreg.height, GL_RGBA, GL_UNSIGNED_BYTE, &transfer_buf[0]);
+		transfer_buf.clear();
+	}
+}
