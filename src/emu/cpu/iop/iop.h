@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <emu/cpu/opcode.h>
+#include <string>
 
 class Bus;
 
@@ -232,6 +233,7 @@ private:
 
 	void direct_jump();
 	void handle_load_delay();
+	void branch(std::string op);
 	void branch();
 	void load(uint32_t regN, uint32_t value);
 

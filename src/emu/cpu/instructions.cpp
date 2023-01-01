@@ -856,8 +856,8 @@ void EmotionEngine::movn(Opcode i)
 void EmotionEngine::syscall(Opcode)
 {
 	can_disassemble = false;
-	if (regs[3].u64[0] != 122)
-		printf("syscall num %d\n", regs[3].u64[0]);
+	// if (regs[3].u64[0] != 122)
+	// 	printf("syscall num %d\n", regs[3].u64[0]);
 	if (regs[3].u64[0] == 0x77)
 	{
 		HandleSifSetDma();

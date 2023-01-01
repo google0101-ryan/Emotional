@@ -6,7 +6,7 @@
 void IoProcessor::op_special()
 {
 	switch (i.r_type.func)
-        {
+    {
         case 0b000000: op_sll(); break;
         case 0b100101: op_or(); break;
         case 0b101011: op_sltu(); break;
@@ -36,7 +36,7 @@ void IoProcessor::op_special()
 		default:
 			printf("[emu/IOP]: Unknown special opcode 0x%02x\n", i.r_type.func);
 			exit(1);
-        }
+    }
 }
 
 void IoProcessor::op_bcond()
@@ -90,9 +90,10 @@ void IoProcessor::op_beq()
     int rs = i.i_type.rs;
 	
 	next_instr.is_delay_slot = true;
+	std::string op = "beq " + std::string(Reg(rs)) + ", " + std::string(Reg(rt));
 	if (regs[rs] == regs[rt])
 	{
-		branch();
+		branch(op);
 	}
 }
 
@@ -102,9 +103,10 @@ void IoProcessor::op_bne()
     int rs = i.i_type.rs;
 	
 	next_instr.is_delay_slot = true;
+	std::string op = "bne " + std::string(Reg(rs)) + ", " + std::string(Reg(rt));
 	if (regs[rs] != regs[rt])
 	{
-		branch();
+		branch(op);
 	}
 }
 
@@ -116,9 +118,10 @@ void IoProcessor::op_blez()
 
     if (can_disassemble) printf("blez %s, 0x%08x\n", Reg(rs), next_instr.pc + ((int16_t)i.i_type.imm << 2));
 
-    if (reg <= 0)
+    std::string op = "blez " + std::string(Reg(rs));
+	if (reg <= 0)
     {
-		branch();
+		branch(op);
     }
 }
 
@@ -128,9 +131,10 @@ void IoProcessor::op_bgtz()
 
     int32_t reg = (int32_t)regs[rs];
     
+	std::string op = "bgez " + std::string(Reg(rs));
 	if (reg > 0)
 	{
-		branch();
+		branch(op);
 	}
 }
 
@@ -177,13 +181,13 @@ void IoProcessor::op_sltiu()
     int rt = i.i_type.rt;
     int rs = i.i_type.rs;
 
-    uint32_t imm = i.i_type.imm;
+    uint32_t imm = (int32_t)(int16_t)i.i_type.imm;
 
 	bool condition = regs[rs] < imm;
 
     set_reg(rt, condition);
 
-    if (can_disassemble) printf("slti %s, %s, 0x%04x\n", Reg(rt), Reg(rs), imm);
+    if (can_disassemble) printf("sltiu %s, %s, 0x%04x\n", Reg(rt), Reg(rs), imm);
 }
 
 void IoProcessor::op_andi()
@@ -305,7 +309,7 @@ void IoProcessor::op_lw()
     {
 		if (vaddr & 3)
 		{
-			printf("Unaligned LW!\n");
+			printf("Unaligned LW at address 0x%08x (lw %s, %d(%s))!\n", vaddr, Reg(rt), off, Reg(base));
 			exit(1);
 		}
 		uint32_t data = bus->read_iop<uint32_t>(vaddr);
@@ -765,7 +769,7 @@ void IoProcessor::op_mfc0()
 
 	if (rd == 14)
 	{
-		printf("Maybe returning from exception at 0x%08x?\n", Cop0.regs[rd]);
+		//printf("Maybe returning from exception at 0x%08x?\n", Cop0.regs[rd]);
 	}
     if (can_disassemble) printf("mfc0 %s, %d\n", Reg(rt), rd);
 }

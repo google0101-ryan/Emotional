@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <queue>
 #include <3party/opengl.h>
+#include <glm/glm.hpp>
 
 class GraphicsSynthesizer
 {
@@ -31,6 +32,19 @@ public:
 			uint64_t id : 8;
 			uint64_t : 32;
 		};
+	};
+
+	union DISPFB
+	{
+		uint64_t value;
+		struct
+		{
+			uint64_t buf_pointer : 9;
+			uint64_t buf_width : 6;
+			uint64_t psm : 5;
+			uint64_t the_rest : 45;
+		};
+		
 	};
 
 	struct GSPRegs
@@ -214,10 +228,11 @@ public:
 	OpenGL::Shader vertex_shader;
 	OpenGL::Shader fragment_shader;
 	OpenGL::Program shader_program;
+	glm::mat4 ortho;
 
 	int vram_transfer_pixels;
 
-	GLint offset_location;
+	GLint offset_location, ortho_location;
 
 	const char* vertex_shader_source = R"(
 	#version 330 core
@@ -229,7 +244,9 @@ public:
 	out vec4 vertex_col;
 	
 	void main() {
-		gl_Position = vec4(((pos.xy - offsets.xy) / 16.f) / 256.f - 1.f, 0.f, 1.f);
+		gl_Position = vec4((pos.xy), 0.f, 1.f);
+		gl_Position.x = (0.000976563 * gl_Position.x) - 1.0f;
+		gl_Position.y = (0.000976563 * gl_Position.y) - 1.0f;
 		vertex_col = vec4(float(col.r) / 255.f, float(col.g) / 255.f, float(col.b) / 255.f, 1.f);
 	}
 	)";
@@ -249,6 +266,8 @@ public:
 
 	void process_vertex(uint64_t data, bool draw_kick);
 	void process_vertex_f(uint64_t data, bool draw_kick);
+
+	void ProcessVramCopy();
 public:
 	OpenGL::Texture vram;
 	GraphicsSynthesizer();
@@ -270,6 +289,8 @@ public:
 		bool group = addr & 0xf000;
 		uint32_t offset = ((addr >> 4) & 0xf) + 15 * group;
 		auto ptr = (uint64_t*)&priv_regs + offset;
+
+		// printf("Writing to priviliged register at 0x%08x\n", addr);
 
 		*ptr = data;
 

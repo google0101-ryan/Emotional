@@ -47,8 +47,8 @@ target_link_libraries(${TARGET_NAME} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES} ${EXT
 if(MSVC)
   target_compile_options(${TARGET_NAME} PRIVATE /W4 /WX)
 else()
-  target_compile_options(${TARGET_NAME} PRIVATE)
-  target_link_options(${TARGET_NAME} PRIVATE)
+  target_compile_options(${TARGET_NAME} PRIVATE -fsanitize=address -pg)
+  target_link_options(${TARGET_NAME} PRIVATE -fsanitize=address -pg)
 endif()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)

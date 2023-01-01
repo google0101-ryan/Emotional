@@ -163,9 +163,6 @@ void EmotionEngine::Clock(int cycles)
 
 		branch_taken = false;
 
-		if (instr.pc == 0x11acb8)
-			printf("main()\n");
-
 		// if ((pc & 0xffff) == 0x10b0)
 		//can_disassemble = true;
 
@@ -174,9 +171,6 @@ void EmotionEngine::Clock(int cycles)
 			printf("Unaligned PC: 0x%08x\n", pc);
 			Application::Exit(1);
 		}
-
-		if (can_disassemble)
-			printf("0x%08x (0x%08x): ", instr.full, instr.pc);
 
         switch (instr.r_type.opcode)
         {

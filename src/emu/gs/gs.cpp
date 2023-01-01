@@ -1,9 +1,11 @@
 #include "gs.h"
 #include <cassert>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/ext.hpp>
 
 void GraphicsSynthesizer::process_vertex(uint64_t data, bool draw_kick)
 {
-	printf("Pushing vertex\n");
+	// printf("Pushing vertex\n");
 
 	Vertex v;
 	v.coords.x() = data & 0xffff;
@@ -22,14 +24,17 @@ void GraphicsSynthesizer::process_vertex(uint64_t data, bool draw_kick)
 	
 	vqueue.push_back(v);
 
+	int context = (prim >> 9) & 1;
+
 	if (draw_kick)
 	{
+		// printf("%d\n", (prim & 7));
 		if (vqueue.size() == 2 && (prim & 7) == 6)
 		{
-			vqueue[0].coords.x() -= xyoffset[0].x_offset;
-			vqueue[1].coords.x() -= xyoffset[0].x_offset;
-			vqueue[0].coords.y() -= xyoffset[0].y_offset;
-			vqueue[1].coords.y() -= xyoffset[0].y_offset;
+			vqueue[0].coords.x() -= xyoffset[context].x_offset;
+			vqueue[1].coords.x() -= xyoffset[context].x_offset;
+			vqueue[0].coords.y() -= xyoffset[context].y_offset;
+			vqueue[1].coords.y() -= xyoffset[context].y_offset;
 
 			Vertex v3, v4;
 			v3.col = v4.col = vqueue[0].col;
@@ -47,8 +52,8 @@ void GraphicsSynthesizer::process_vertex(uint64_t data, bool draw_kick)
 			glBufferData(GL_ARRAY_BUFFER, sizeof(attribs), attribs, GL_STATIC_DRAW);
 			OpenGL::draw(OpenGL::Primitives::Triangle, 6);
 		
-			printf("Queued vertices (%f, %f), (%f, %f), (%f, %f), (%f, %f)\n", (vqueue[0].coords.x() / 16.0f) / 256.0f - 1.0f, (vqueue[0].coords.y() / 16.0f) / 256.0f - 1.0f, (vqueue[1].coords.x() / 16.0f) / 256.0f - 1.0f, (vqueue[1].coords.y() / 16.0f) / 256.0f - 1.0f, (v3.coords.x() / 16.0f) / 256.0f - 1.0f, (v3.coords.y() / 16.0f) / 256.0f - 1.0f, (v4.coords.x() / 16.0f) / 256.0f - 1.0f, (v4.coords.y() / 16.0f) / 256.0f - 1.0f);
-			printf("Normalized from (%f, %f) and (%f, %f)\n", vqueue[0].coords.x(), vqueue[0].coords.y(), vqueue[1].coords.x(), vqueue[1].coords.y());
+			// printf("Queued vertices (%f, %f), (%f, %f), (%f, %f), (%f, %f)\n", (vqueue[0].coords.x() / 16.0f) * 0.000976563f - 1.0f, (vqueue[0].coords.y() / 16.0f) * 0.000976563f - 1.0f, (vqueue[1].coords.x() / 16.0f) * 0.000976563f - 1.0f, (vqueue[1].coords.y() / 16.0f) * 0.000976563f - 1.0f, (v3.coords.x() / 16.0f) * 0.000976563f - 1.0f, (v3.coords.y() / 16.0f) * 0.000976563f - 1.0f, (v4.coords.x() / 16.0f) * 0.000976563f - 1.0f, (v4.coords.y() / 16.0f) * 0.000976563f - 1.0f);
+			// printf("Normalized from (%f, %f) and (%f, %f)\n", vqueue[0].coords.x(), vqueue[0].coords.y(), vqueue[1].coords.x(), vqueue[1].coords.y());
 			vqueue.clear();
 		}
 		else if (vqueue.size() == 3 && (prim & 7) == 3)
@@ -68,6 +73,8 @@ void GraphicsSynthesizer::process_vertex(uint64_t data, bool draw_kick)
 			glBufferData(GL_ARRAY_BUFFER, sizeof(attribs), attribs, GL_STATIC_DRAW);
 			OpenGL::draw(OpenGL::Primitives::Triangle, 3);
 
+			// printf("Queued vertices (%f, %f), (%f, %f), (%f, %f)\n", (vqueue[0].coords.x() / 16.0f) * 0.000976563f - 1.0f, (vqueue[0].coords.y() / 16.0f) * 0.000976563f - 1.0f, (vqueue[1].coords.x() / 16.0f) * 0.000976563f - 1.0f, (vqueue[1].coords.y() / 16.0f) * 0.000976563f - 1.0f, (vqueue[2].coords.x() / 16.0f) * 0.000976563f - 1.0f, (vqueue[2].coords.y() / 16.0f) * 0.000976563f - 1.0f);
+			// printf("Normalized from (%f, %f) and (%f, %f)\n", vqueue[0].coords.x(), vqueue[0].coords.y(), vqueue[1].coords.x(), vqueue[1].coords.y());
 			vqueue.clear();
 		}
 	}
@@ -75,7 +82,7 @@ void GraphicsSynthesizer::process_vertex(uint64_t data, bool draw_kick)
 
 void GraphicsSynthesizer::process_vertex_f(uint64_t data, bool draw_kick)
 {
-	printf("Pushing vertex\n");
+	// printf("Pushing vertex\n");
 
 	auto& xyz = draw_kick ? xyzf2 : xyzf3;
 
@@ -96,16 +103,43 @@ void GraphicsSynthesizer::process_vertex_f(uint64_t data, bool draw_kick)
 	
 	vqueue.push_back(v);
 
+	int context = (prim >> 9) & 1;
+
 	if (draw_kick)
 	{
-		if (vqueue.size() == 3 && (prim & 7) == 3)
+		if (vqueue.size() == 2 && (prim & 7) == 6)
 		{
-			// vqueue[0].coords.x() -= xyoffset[0].x_offset;
-			// vqueue[1].coords.x() -= xyoffset[0].x_offset;
-			// vqueue[2].coords.x() -= xyoffset[0].x_offset;
-			// vqueue[0].coords.y() -= xyoffset[0].y_offset;
-			// vqueue[1].coords.y() -= xyoffset[0].y_offset;
-			// vqueue[2].coords.y() -= xyoffset[0].y_offset;
+			vqueue[0].coords.x() -= xyoffset[context].x_offset;
+			vqueue[1].coords.x() -= xyoffset[context].x_offset;
+			vqueue[0].coords.y() -= xyoffset[context].y_offset;
+			vqueue[1].coords.y() -= xyoffset[context].y_offset;
+
+			Vertex v3, v4;
+			v3.col = v4.col = vqueue[0].col;
+			v3.coords.x() = vqueue[1].coords.x();
+			v3.coords.y() = vqueue[0].coords.y();
+			v4.coords.x() = vqueue[0].coords.x();
+			v4.coords.y() = vqueue[1].coords.y();
+
+			Vertex attribs[] =
+			{
+				vqueue[0], v3, vqueue[1],
+				vqueue[1], v4, vqueue[0]
+			};
+
+			glBufferData(GL_ARRAY_BUFFER, sizeof(attribs), attribs, GL_STATIC_DRAW);
+			OpenGL::draw(OpenGL::Primitives::Triangle, 6);
+		
+			vqueue.clear();
+		}
+		else if (vqueue.size() == 3 && (prim & 7) == 3)
+		{
+			vqueue[0].coords.x() -= xyoffset[0].x_offset;
+			vqueue[1].coords.x() -= xyoffset[0].x_offset;
+			vqueue[2].coords.x() -= xyoffset[0].x_offset;
+			vqueue[0].coords.y() -= xyoffset[0].y_offset;
+			vqueue[1].coords.y() -= xyoffset[0].y_offset;
+			vqueue[2].coords.y() -= xyoffset[0].y_offset;
 
 			Vertex attribs[] =
 			{
@@ -115,9 +149,17 @@ void GraphicsSynthesizer::process_vertex_f(uint64_t data, bool draw_kick)
 			glBufferData(GL_ARRAY_BUFFER, sizeof(attribs), attribs, GL_STATIC_DRAW);
 			OpenGL::draw(OpenGL::Primitives::Triangle, 3);
 
+			// printf("Queued vertices (%f, %f), (%f, %f), (%f, %f)\n", (vqueue[0].coords.x() / 16.0f) * 0.000976563f - 1.0f, (vqueue[0].coords.y() / 16.0f) * 0.000976563f - 1.0f, (vqueue[1].coords.x() / 16.0f) * 0.000976563f - 1.0f, (vqueue[1].coords.y() / 16.0f) * 0.000976563f - 1.0f, (vqueue[2].coords.x() / 16.0f) * 0.000976563f - 1.0f, (vqueue[2].coords.y() / 16.0f) * 0.000976563f - 1.0f);
+			// printf("Normalized from (%f, %f) and (%f, %f)\n", vqueue[0].coords.x(), vqueue[0].coords.y(), vqueue[1].coords.x(), vqueue[1].coords.y());
 			vqueue.clear();
 		}
 	}
+}
+
+void GraphicsSynthesizer::ProcessVramCopy()
+{
+	// printf("Doing VRAM-to-VRAM transfer %dx%d\n", trxreg.width, trxreg.height);
+	glBlitFramebuffer(trxpos.source_top_left_x, trxpos.source_top_left_y, trxpos.source_top_left_x + trxreg.width, trxpos.source_top_left_y + trxreg.height, trxpos.dest_top_left_x, trxpos.dest_top_left_y, trxpos.dest_top_left_x + trxreg.width, trxpos.dest_top_left_y + trxreg.height, GL_COLOR_BUFFER_BIT, GL_LINEAR);
 }
 
 GraphicsSynthesizer::GraphicsSynthesizer()
@@ -156,6 +198,10 @@ GraphicsSynthesizer::GraphicsSynthesizer()
 	shader_program.use();
 
 	offset_location = glGetUniformLocation(shader_program.handle(), "offsets");
+	ortho_location = glGetUniformLocation(shader_program.handle(), "ortho");
+
+	ortho = glm::ortho(0, 640, 0, 480);
+	glUniformMatrix4fv(ortho_location, 1, GL_FALSE, glm::value_ptr(ortho));
 }
 
 void GraphicsSynthesizer::write(uint16_t index, uint64_t data)
@@ -213,6 +259,9 @@ void GraphicsSynthesizer::write(uint16_t index, uint64_t data)
 	case 0x18:
 	case 0x19:
 		xyoffset[context].value = data;
+		// printf("X/Y offset %d set to %d,%d\n", context, xyoffset[context].x_offset, xyoffset[context].y_offset);
+		xyoffset[context].x_offset /= 16;
+		xyoffset[context].y_offset /= 16;
 		glUniform2f(offset_location, (GLfloat)(xyoffset[context].x_offset), (GLfloat)(xyoffset[context].y_offset));
 		break;
 	case 0x1A:
@@ -286,11 +335,13 @@ void GraphicsSynthesizer::write(uint16_t index, uint64_t data)
 	case 0x52:
 		trxreg.value = data;
 		vram_transfer_pixels = trxreg.height * trxreg.width;
+		// printf("Setting up for VRAM transfer of size %dx%d (%d bytes)\n", trxreg.width, trxreg.height, vram_transfer_pixels);
 		break;
 	case 0x53:
     {
 		trxdir = data;
 		data_written = 0;
+		if (trxdir == 2)  ProcessVramCopy();
         break;
 	}
 	case 0x60:
@@ -306,10 +357,10 @@ void GraphicsSynthesizer::write(uint16_t index, uint64_t data)
 
 void GraphicsSynthesizer::write_hwreg(uint64_t data)
 {
-	vram_transfer_pixels--;
+	vram_transfer_pixels -= 2;
 	transfer_buf.push_back(data & 0xffffffff);
 	transfer_buf.push_back(data >> 32);
-	printf("%d bytes remaining on VRAM transfer\n", vram_transfer_pixels);
+	// printf("%d bytes remaining on VRAM transfer\n", vram_transfer_pixels);
 	if (vram_transfer_pixels == 0)
 	{
 		vram.bind();

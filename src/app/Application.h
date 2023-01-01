@@ -5,6 +5,8 @@
 #include <SDL2/SDL.h>
 #include <3party/opengl.h>
 
+extern bool shouldCullFb;
+
 class Application
 {
 private:

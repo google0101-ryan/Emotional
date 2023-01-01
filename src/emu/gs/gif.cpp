@@ -7,7 +7,7 @@ void GIF::process_packed(uint128_t qword)
 	uint64_t regs = tag.regs;
 	uint32_t desc = (regs >> 4 * curr_reg) & 0xf;
 
-	printf("[emu/GIF]: PACKED write to 0x%08x\n", desc);
+	// printf("[emu/GIF]: PACKED write to 0x%08x\n", desc);
 
 	switch (desc)
 	{
@@ -56,6 +56,7 @@ void GIF::process_packed(uint128_t qword)
 		target.z = (qword.u128 >> 64) & 0xffffffff;
 
 		gpu->write(address, target.value);
+		break;
 	}
 	case 0x0E:
 	{
@@ -117,7 +118,7 @@ void GIF::tick(int cycles)
 			
 			tag.value = qword.u128;
 
-			printf("[emu/GIF]: Processing GIF packet NLOOP: %d, EOP: %d, PRIM_EN: %d, PRIM: 0x%08lx, FORMAT: %d, NREGS: %d, REGS: 0x%08lx\n", tag.nloop, tag.eop, tag.pre, tag.prim, tag.flg, tag.nreg, tag.regs);
+			// printf("[emu/GIF]: Processing GIF packet NLOOP: %d, EOP: %d, PRIM_EN: %d, PRIM: 0x%08lx, FORMAT: %d, NREGS: %d, REGS: 0x%08lx\n", tag.nloop, tag.eop, tag.pre, tag.prim, tag.flg, tag.nreg, tag.regs);
 
 			if (tag.pre)
 				gpu->prim = tag.prim;
@@ -145,7 +146,7 @@ void GIF::tick(int cycles)
 				fifo.pop();
 				break;
 			case 2:
-				printf("Transfering quad-word to VRAM\n");
+				// printf("Transfering quad-word to VRAM\n");
 				gpu->write_hwreg(fifo.front().u64[0]);
 				gpu->write_hwreg(fifo.front().u64[1]);
 				fifo.pop();

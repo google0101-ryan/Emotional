@@ -90,7 +90,7 @@ void EmotionTimers::write(uint32_t addr, uint32_t value)
 	uint32_t offset = (addr & 0xf0) >> 4;
 	auto ptr = (uint32_t*)&timers[num] + offset;
 
-	printf("[emu/Timers]: Writing to %s of timer %d\n", REGS[offset], num);
+	// printf("[emu/Timers]: Writing to %s of timer %d\n", REGS[offset], num);
 
 	if (offset == 1)
 	{
@@ -110,7 +110,7 @@ void EmotionTimers::write(uint32_t addr, uint32_t value)
 
 		value &= 0x3ff;
 
-		printf("[emu/Timers]: Setting timer %d clock to %s\n", num, CLOCK[timer.mode.clock]);
+		// printf("[emu/Timers]: Setting timer %d clock to %s\n", num, CLOCK[timer.mode.clock]);
 	}
 
 	*ptr = value;

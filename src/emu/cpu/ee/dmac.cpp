@@ -61,11 +61,11 @@ void EmotionDma::write(uint32_t addr, uint32_t data)
 		data &= 0x01fffff0;
 	
 	*ptr = data;
-	printf("[emu/Dmac]: Write 0x%08x to %s (0x%08x) of channel %d\n", data, REGS[reg], addr, chan);
+	// printf("[emu/Dmac]: Write 0x%08x to %s (0x%08x) of channel %d\n", data, REGS[reg], addr, chan);
 
 	if (channels[chan].control.running)
 	{
-		printf("Started transfer on channel %d\n", chan);
+		// printf("Started transfer on channel %d\n", chan);
 	}
 }
 
@@ -87,7 +87,7 @@ void EmotionDma::write_dma(uint32_t addr, uint32_t data)
 	else
 		*ptr = data;
 
-	printf("[emu/DMAC]: Writing 0x%08x to %s\n", data, GLOBALS[offset]);
+	// printf("[emu/DMAC]: Writing 0x%08x to %s\n", data, GLOBALS[offset]);
 }
 
 uint32_t EmotionDma::read_dma(uint32_t addr)
@@ -95,7 +95,7 @@ uint32_t EmotionDma::read_dma(uint32_t addr)
     uint32_t offset = (addr >> 4) & 0xf;
 	auto ptr = (uint32_t*)&globals + offset;
 	
-	//printf("[emu/DMAC]: Reading %s (0x%08x)\n", GLOBALS[offset], *ptr);
+	//// printf("[emu/DMAC]: Reading %s (0x%08x)\n", GLOBALS[offset], *ptr);
 
 	return *ptr;
 }
@@ -136,7 +136,7 @@ void EmotionDma::tick(int cycles)
 						uint128_t qword;
 						qword.u128 = *(__uint128_t*)&bus->grab_ee_ram()[channel.address];
 
-						printf("[emu/DMAC]: Transferring GIF qword 0x%lx%016lx\n", qword.u64[1], qword.u64[0]);
+						// printf("[emu/DMAC]: Transferring GIF qword 0x%lx%016lx\n", qword.u64[1], qword.u64[0]);
 						
 						gif->write32(0x10006000, qword);
 						channel.qword_count--;
@@ -160,7 +160,7 @@ void EmotionDma::tick(int cycles)
 							uint128_t qword = *(uint128_t*)data;
 							uint64_t upper = qword.u64[1];
 							uint64_t lower = qword.u64[0];
-							printf("[emu/DMAC]: SIF0: 0x%lx%016lx\n", upper, lower);
+							// printf("[emu/DMAC]: SIF0: 0x%lx%016lx\n", upper, lower);
 
 							bus->write<__uint128_t>(channel.address, qword.u128);
 
@@ -181,7 +181,7 @@ void EmotionDma::tick(int cycles)
 						}
 
 						uint64_t upper = qword >> 64, lower = qword;
-						printf("[DMAC][SIF1] Transfering to SIF1 FIFO 0x%lx%016lx\n", upper, lower);
+						// printf("[DMAC][SIF1] Transfering to SIF1 FIFO 0x%lx%016lx\n", upper, lower);
 
 						channel.qword_count--;
 						channel.address += 16;
@@ -195,7 +195,7 @@ void EmotionDma::tick(int cycles)
 				}
 				else if (channel.end_transfer)
 				{
-					printf("[emu/DMAC]: End transfer on channel %d\n", id);
+					// printf("[emu/DMAC]: End transfer on channel %d\n", id);
 
 					channel.end_transfer = false;
 					channel.control.running = 0;
@@ -204,7 +204,7 @@ void EmotionDma::tick(int cycles)
 
 					if (globals.d_stat.channel_irq & globals.d_stat.channel_irq_mask)
 					{
-						printf("Triggering end-of-channel interrupt\n");
+						// printf("Triggering end-of-channel interrupt\n");
 						bus->TriggerDMAInterrupt();
 					}
 				}
@@ -253,7 +253,7 @@ void EmotionDma::fetch_tag(int id)
 
 		tag.value = *(__uint128_t*)&bus->grab_ee_ram()[address];
 
-		printf("[emu/DMAC]: New GIF transfer: %d qwords\n", tag.qwords);
+		// printf("[emu/DMAC]: New GIF transfer: %d qwords\n", tag.qwords);
 
 		channel.qword_count = tag.qwords;
 		channel.control.tag = (tag.value >> 16) & 0xffff;
@@ -288,7 +288,7 @@ void EmotionDma::fetch_tag(int id)
 			}
 
 			tag.value = *(uint64_t*)data;
-			printf("Read SIF0 DMA tag 0x%lx\n", (uint64_t)tag.value);
+			// printf("Read SIF0 DMA tag 0x%lx\n", (uint64_t)tag.value);
 
 			channel.qword_count = tag.qwords;
 			channel.control.tag = (tag.value >> 16) & 0xffff;
@@ -305,7 +305,7 @@ void EmotionDma::fetch_tag(int id)
 		auto address = channel.tag_address.address;
 
 		tag.value = *(__uint128_t*)&bus->grab_ee_ram()[address];
-		printf("[emu/DMAC]: Read SIF1 DMA tag 0x%08lx\n", (uint64_t)tag.value);
+		// printf("[emu/DMAC]: Read SIF1 DMA tag 0x%08lx\n", (uint64_t)tag.value);
 
 		channel.qword_count = tag.qwords;
 		channel.control.tag = (tag.value >> 16) & 0xffff;
@@ -357,7 +357,7 @@ uint32_t EmotionDma::read(uint32_t addr)
 	uint32_t offset = (addr >> 4) & 0xf;
 	auto ptr = (uint32_t*)&channels[channel] + offset;
 
-	//printf("[emu/DMAC]: Reading %s from channel %d\n", REGS[offset], channel);
+	//// printf("[emu/DMAC]: Reading %s from channel %d\n", REGS[offset], channel);
 
 	return *ptr;
 }

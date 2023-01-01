@@ -8,7 +8,7 @@ uint32_t exception_addr[2] = { 0x80000080, 0xBFC00180 };
 
 void IoProcessor::exception(Exception cause, uint32_t cop)
 {
-	printf("[IOP] Exception of type %d\n", (int)cause);
+	// printf("[IOP] Exception of type %d\n", (int)cause);
 
 	uint32_t mode = Cop0.status.value;
 	Cop0.status.value &= ~(uint32_t)0x3F;
@@ -86,6 +86,16 @@ void IoProcessor::handle_load_delay()
 	regs[0] = 0;
 }
 
+void IoProcessor::branch(std::string op)
+{
+	int32_t imm = (int16_t)i.i_type.imm;
+
+	next_instr.branch_taken = true;
+	pc = next_instr.pc + (imm << 2);
+
+	if (can_disassemble) printf("%s, 0x%08x\n", op.c_str(), pc);
+}
+
 void IoProcessor::branch()
 {
 	int32_t imm = (int16_t)i.i_type.imm;
@@ -115,6 +125,8 @@ void IoProcessor::Clock(int cycles)
 		{
         	bus->IopPrint(regs[5], regs[6]);
 		}
+
+		// if (i.pc == 0x1b8a0) can_disassemble = true;
 		
 		if (pc & 0x3)
 		{

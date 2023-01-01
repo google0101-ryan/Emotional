@@ -49,9 +49,20 @@ bool Application::Init(int argc, char** argv)
 
 	if (argc >= 4)
 	{
-		if (!strncmp(argv[3], "--fast-boot", 11))
+		int current = 3;
+		argc -= 3;
+		while (argc)
 		{
-			bus->FastBoot();
+			if (!strncmp(argv[current], "--fast-boot", 11))
+			{
+				bus->FastBoot();
+			}
+			else if (!strncmp(argv[current], "--dont-clip", 11))
+			{
+				shouldCullFb = false;
+			}
+			current++;
+			argc--;
 		}
 	}
 
@@ -74,6 +85,8 @@ bool Application::Init(int argc, char** argv)
 
 static uint64_t total_cycles = 0;
 bool vblank_started = false;
+
+bool shouldCullFb = true;
 
 int Application::Run()
 {
@@ -105,10 +118,29 @@ int Application::Run()
 
 				SDL_Surface* surface = SDL_CreateRGBSurfaceFrom(out, 2048, 2048, 8*4, 2048 * 4, 0xFF, 0xFF00, 0xFF0000, 0xFF000000);
 				SDL_Surface* window_surface = SDL_GetWindowSurface(window);
-				SDL_BlitSurface(surface, NULL, window_surface, NULL);
-				SDL_UpdateWindowSurface(window);
 
-				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+				uint64_t dispfb = (bus->GetGS()->priv_regs.pmode & 1) ? bus->GetGS()->priv_regs.dispfb1 : bus->GetGS()->priv_regs.dispfb2;
+				uint64_t display = (bus->GetGS()->priv_regs.pmode & 1) ? bus->GetGS()->priv_regs.display1 : bus->GetGS()->priv_regs.display2;
+
+				uint64_t fb_base = (dispfb & 0x1FF) * 2048;
+				uint64_t fb_width = (display >> 32) & 0x7FF;
+				uint64_t fb_height = (display >> 44) & 0x7FF;
+				fb_width += 1;
+				fb_height += 1;
+
+				// printf("Framebuffer is at %d, %d (%dx%d), surface is %dx%d\n", fb_base % 2048, fb_base / 2048, fb_width, fb_height, surface->w, surface->h);
+
+				SDL_Rect rect;
+				rect.x = fb_base % 2048;
+				rect.y = fb_base / 2048;
+				rect.w = 640;
+				rect.h = 224;
+				
+				if (shouldCullFb)
+					SDL_BlitSurface(surface, &rect, window_surface, NULL);
+				else
+					SDL_BlitSurface(surface, NULL, window_surface, NULL);
+				SDL_UpdateWindowSurface(window);
 			}
 		}
 
@@ -148,4 +180,7 @@ void Application::Exit()
         mem << bus->read<uint8_t>(i);
     mem.flush();
     mem.close();
+
+	if (window)
+		SDL_DestroyWindow(window);
 }
