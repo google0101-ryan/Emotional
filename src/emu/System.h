@@ -11,5 +11,6 @@ void LoadBios(std::string biosName);
 
 void Reset();
 void Run();
+void Dump();
 
 }

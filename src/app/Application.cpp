@@ -48,4 +48,6 @@ void Application::Exit(int code)
 }
 
 void Application::Exit()
-{}
+{
+	System::Dump();
+}

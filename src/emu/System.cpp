@@ -36,3 +36,8 @@ void System::Run()
 	while (1)
 		EmotionEngine::Clock();
 }
+
+void System::Dump()
+{
+	EmotionEngine::Dump();
+}

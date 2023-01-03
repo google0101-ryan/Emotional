@@ -1,55 +1,34 @@
 #include "EmotionEngine.h"
 #include <emu/memory/Bus.h>
+#include <emu/cpu/ee/x64/emit.h>
 
 namespace EE_JIT
 {
 
-enum IRInstrs
+void JIT::EmitBNE(uint32_t instr, EE_JIT::IRInstruction &i)
 {
-	MOV = 0,
-	NOP = 0,
-	SLTI = 0,
-};
+	printf("bne\n");
 
-struct IRValue
-{
-public:
-	enum Type
-	{
-		Imm,
-		Reg,
-		Cop0Reg,
-		FP
-	};
-private:
-	union
-	{
-		uint32_t imm;
-		int register_num;
-		float fp_value;
-		int cop_regnum;
-	} value;
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
 
-	Type type;
-public:
-	IRValue(Type type)
-	: type(type) {}
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue imm = IRValue(IRValue::Imm);
 
-	bool IsImm() {return type == Imm;}
-	// Can be used for guest and COP0 registers
-	void SetReg(uint32_t reg) {value.register_num = reg;}
-	void SetImm(uint16_t imm) {value.imm = (int32_t)(int16_t)imm;}
-};
+	source.SetReg(rs);
+	dest.SetReg(rt);
+	imm.SetImm(instr & 0xffff);
 
-struct IRInstruction
-{
-	uint8_t instr;
-	// Arguments are right -> left
-	std::vector<IRValue> args;
-};
+	i = IRInstruction::Build({dest, source, imm}, IRInstrs::BranchConditional);
+	i.b_type = IRInstruction::BranchType::NE;
+	cur_block->ir.push_back(i);
+}
 
 void JIT::EmitSLTI(uint32_t instr, EE_JIT::IRInstruction &i)
 {
+	printf("slti\n");
+
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
@@ -60,10 +39,7 @@ void JIT::EmitSLTI(uint32_t instr, EE_JIT::IRInstruction &i)
 	dest.SetReg(rt);
 	imm.SetImm(instr & 0xffff);
 
-	i.instr = IRInstrs::SLTI;
-	i.args.push_back(imm);
-	i.args.push_back(source);
-	i.args.push_back(dest);
+	i = IRInstruction::Build({dest, source, imm}, IRInstrs::SLTI);
 
 	cur_block->ir.push_back(i);
 }
@@ -87,6 +63,8 @@ void JIT::EmitCOP0(uint32_t instr, EE_JIT::IRInstruction &i)
 
 void JIT::EmitMFC0(uint32_t instr, EE_JIT::IRInstruction& i)
 {
+	printf("mfc0\n");
+
 	int rd = (instr >> 11) & 0x1F;
 	int rt = (instr >> 16) & 0x1F;
 
@@ -95,25 +73,19 @@ void JIT::EmitMFC0(uint32_t instr, EE_JIT::IRInstruction& i)
 
 	dest.SetReg(rd);
 	src.SetReg(rt);
-
-	i.instr = IRInstrs::MOV;
-	i.args.push_back(src);
-	i.args.push_back(dest);
+	
+	i = IRInstruction::Build({dest, src}, IRInstrs::MOV);
 
 	cur_block->ir.push_back(i);
 }
 
 void JIT::EmitIR(uint32_t instr)
 {
-	if (!cur_block)
-	{
-		cur_block = new Block;
-	}
-
 	EE_JIT::IRInstruction current_instruction;
 
 	if (instr == 0)
 	{
+		printf("nop\n");
 		current_instruction.instr = NOP;
 		cur_block->ir.push_back(current_instruction);
 		return;
@@ -123,6 +95,9 @@ void JIT::EmitIR(uint32_t instr)
 
 	switch (opcode)
 	{
+	case 0x05:
+		EmitBNE(instr, current_instruction);
+		break;
 	case 0x0A:
 		EmitSLTI(instr, current_instruction);
 		break;
@@ -133,6 +108,26 @@ void JIT::EmitIR(uint32_t instr)
 		printf("[emu/CPU]: Cannot emit unknown instruction 0x%02x\n", opcode);
 		exit(1);
 	}
+}
+
+void JIT::EmitPrequel()
+{
+	if (!cur_block)
+	{
+		cur_block = new Block;
+	}
+
+	auto i = IRInstruction::Build({}, IRInstrs::SaveHostRegs);
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitDone()
+{
+	auto i = IRInstruction::Build({}, IRInstrs::RestoreHostRegs);
+	cur_block->ir.push_back(i);
+
+	blockCache.push_back(cur_block);
+	EE_JIT::emit->TranslateBlock(cur_block);
 }
 
 }
@@ -149,15 +144,53 @@ void Reset()
 
 	state.pc = 0xBFC00000;
 	state.next_pc = 0xBFC00004;
+
+	EE_JIT::emit = new EE_JIT::Emitter();
+}
+
+bool IsBranch(uint32_t instr)
+{
+	uint8_t opcode = (instr >> 26) & 0x3F;
+
+	switch (opcode)
+	{
+	case 0x05:
+		return true;
+	default:
+		return false;
+	}
 }
 
 void Clock()
 {
-	uint32_t instr = Bus::Read32(state.pc);
-	state.pc = state.next_pc;
-	state.next_pc += 4;
+	jit.EmitPrequel();
 
-	jit.EmitIR(instr);
+	bool isBranch = false;
+	bool isBranchDelayed = false;
+
+	do
+	{
+		uint32_t instr = Bus::Read32(state.pc);
+		state.pc = state.next_pc;
+		state.next_pc += 4;
+
+		jit.EmitIR(instr);
+
+		isBranch = isBranchDelayed;
+		isBranchDelayed = IsBranch(instr);
+	} while (!isBranch);
+
+	jit.EmitDone();
+	exit(1);
 }
 
+void Dump()
+{
+	EE_JIT::emit->Dump();
+}
+
+ProcessorState* GetState()
+{
+	return &state;
+}
 }
