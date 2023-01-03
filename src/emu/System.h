@@ -9,4 +9,7 @@ namespace System
 
 void LoadBios(std::string biosName);
 
+void Reset();
+void Run();
+
 }

@@ -18,7 +18,8 @@ include_directories(${SDL2_INCLUDE_DIRS})
 set(SOURCES src/main.cpp
             src/app/Application.cpp
             src/emu/memory/Bus.cpp
-            src/emu/System.cpp)
+            src/emu/System.cpp
+			src/emu/cpu/ee/EmotionEngine.cpp)
 
 set(CMAKE_BUILD_TYPE Debug)
 

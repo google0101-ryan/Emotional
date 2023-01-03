@@ -1,5 +1,6 @@
 #include "System.h"
 #include <emu/memory/Bus.h>
+#include <emu/cpu/ee/EmotionEngine.h>
 
 void System::LoadBios(std::string biosName)
 {
@@ -23,4 +24,15 @@ void System::LoadBios(std::string biosName)
 	delete[] rom;
 
 	printf("[emu/Sys]: Loaded BIOS %s\n", biosName.c_str());
+}
+
+void System::Reset()
+{
+	EmotionEngine::Reset();
+}
+
+void System::Run()
+{
+	while (1)
+		EmotionEngine::Clock();
 }
