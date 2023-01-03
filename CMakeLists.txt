@@ -17,23 +17,8 @@ include_directories(${SDL2_INCLUDE_DIRS})
 
 set(SOURCES src/main.cpp
             src/app/Application.cpp
-            src/emu/Bus.cpp
-            src/emu/cpu/EmotionEngine.cpp
-            src/emu/cpu/instructions.cpp
-            src/emu/gs/gif.cpp
-			src/emu/gs/gs.cpp
-            src/emu/cpu/ee/timers.cpp
-            src/emu/cpu/ee/dmac.cpp
-            src/emu/cpu/ee/vu.cpp
-            src/emu/cpu/ee/vif.cpp
-            src/emu/sif.cpp
-            src/emu/cpu/iop/iop.cpp
-            src/emu/cpu/iop/opcodes.cpp
-            src/emu/cpu/iop/dma.cpp
-            src/emu/cpu/iop/timers.cpp
-			src/emu/cpu/iop/sio2.cpp
-			src/emu/cpu/cop0.cpp
-			3party/gl3w/gl3w.c)
+            src/emu/memory/Bus.cpp
+            src/emu/System.cpp)
 
 set(CMAKE_BUILD_TYPE Debug)
 
