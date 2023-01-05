@@ -1,9 +1,13 @@
+// (c) Copyright 2022 Ryan Ilari
+// This code is licensed under MIT license (see LICENSE for details)
+
 #include "Bus.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
 
 uint8_t BiosRom[0x400000];
+uint8_t spr[0x4000];
 
 static uint32_t Translate(uint32_t addr)
 {
@@ -42,5 +46,33 @@ uint32_t Bus::Read32(uint32_t addr)
 		return *(uint32_t*)&BiosRom[addr - 0x1fc00000];
 	
 	printf("Read from unknown address 0x%08x\n", addr);
+	exit(1);
+}
+
+void Bus::Write64(uint32_t addr, uint64_t data)
+{
+	addr = Translate(addr);
+
+	if (addr >= 0x70000000 && addr < 0x70004000)
+	{
+		*(uint64_t*)&spr[addr - 0x70000000] = data;
+		return;
+	}
+
+	printf("Write64 to unknown address 0x%08x\n", addr);
+	exit(1);
+}
+
+void Bus::Write32(uint32_t addr, uint32_t data)
+{
+	addr = Translate(addr);
+
+	switch (addr)
+	{
+	case 0x1000f500: // EE TLB enable?
+		return;
+	}
+
+	printf("Write to unknown address 0x%08x\n", addr);
 	exit(1);
 }

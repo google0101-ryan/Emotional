@@ -1,3 +1,6 @@
+// (c) Copyright 2022 Ryan Ilari
+// This code is licensed under MIT license (see LICENSE for details)
+
 #include "Application.h"
 #include <signal.h>
 #include <emu/System.h>
@@ -27,7 +30,7 @@ bool Application::Init(int argc, char** argv)
 	System::LoadBios(argv[1]);
 
     std::atexit(Application::Exit);
-    signal(SIGSEGV, Sig);
+    // signal(SIGSEGV, Sig);
     signal(SIGINT, Application::Exit);
     
     isRunning = true;

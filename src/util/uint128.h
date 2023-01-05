@@ -1,3 +1,6 @@
+// (c) Copyright 2022 Ryan Ilari
+// This code is licensed under MIT license (see LICENSE for details)
+
 #pragma once
 
 #include <bits/stdint-uintn.h>
@@ -9,7 +12,7 @@
 
 typedef union
 {
-    __extension__ unsigned __int128 u128;
+    unsigned __int128 u128;
     uint64_t u64[2];
     uint32_t u32[4];
     uint16_t u16[8];

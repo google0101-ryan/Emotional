@@ -1,3 +1,6 @@
+// (c) Copyright 2022 Ryan Ilari
+// This code is licensed under MIT license (see LICENSE for details)
+
 #include "System.h"
 #include <emu/memory/Bus.h>
 #include <emu/cpu/ee/EmotionEngine.h>

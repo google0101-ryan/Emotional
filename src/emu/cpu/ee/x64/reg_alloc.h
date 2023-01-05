@@ -1,3 +1,6 @@
+// (c) Copyright 2022 Ryan Ilari
+// This code is licensed under MIT license (see LICENSE for details)
+
 #pragma once
 
 #include <cstdint>
@@ -10,6 +13,7 @@ private:
 	// Due to how 8-bit registers map, we have a seperate array
 	std::array<bool, 8> used_registers_8;
 
+public:
 	enum HostRegisters64
 	{
 		RAX,
@@ -21,9 +25,10 @@ private:
 		RSI,
 		RDI
 	};
-public:
+	
 	RegisterAllocator();
 	void Reset();
 
 	int AllocHostRegister();
+	void MarkRegUsed(int reg);
 };
