@@ -29,10 +29,12 @@ private:
 	void EmitBC(IRInstruction i);
 	void EmitIncPC(IRInstruction i);
 	void EmitOR(IRInstruction i);
+	void EmitAND(IRInstruction i);
 	void EmitJA(IRInstruction i);
 	void EmitJumpImm(IRInstruction i);
 	void EmitAdd(IRInstruction i);
 	void EmitMemoryStore(IRInstruction i);
+	void EmitShift(IRInstruction i);
 	void EmitIR(IRInstruction i);
 public:
 	Emitter();

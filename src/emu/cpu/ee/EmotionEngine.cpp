@@ -23,6 +23,27 @@ void JIT::EmitJAL(uint32_t instr, EE_JIT::IRInstruction &i)
 	cur_block->ir.push_back(i);
 }
 
+void JIT::EmitBEQ(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	printf("beq\n");
+
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue imm = IRValue(IRValue::Imm);
+
+
+	source.SetReg(rs);
+	dest.SetReg(rt);
+	imm.SetImm(instr & 0xffff);
+
+	i = IRInstruction::Build({dest, source, imm}, IRInstrs::BranchConditional);
+	i.b_type = IRInstruction::BranchType::EQ;
+	cur_block->ir.push_back(i);
+}
+
 void JIT::EmitBNE(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	printf("bne\n");
@@ -79,6 +100,25 @@ void JIT::EmitSLTI(uint32_t instr, EE_JIT::IRInstruction &i)
 	imm.SetImm(instr & 0xffff);
 
 	i = IRInstruction::Build({dest, source, imm}, IRInstrs::SLTI);
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitANDI(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	printf("andi %s, %s, 0x%04x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), instr & 0xffff);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue imm = IRValue(IRValue::Imm);
+	source.SetReg(rs);
+	dest.SetReg(rt);
+	imm.SetImmUnsigned(instr & 0xffff);
+
+	i = IRInstruction::Build({dest, source, imm}, IRInstrs::AND);
 
 	cur_block->ir.push_back(i);
 }
@@ -187,6 +227,29 @@ void JIT::EmitSD(uint32_t instr, EE_JIT::IRInstruction &i)
 	cur_block->ir.push_back(i);
 }
 
+void JIT::EmitSLL(uint32_t instr, EE_JIT::IRInstruction& i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int sa = (instr >> 6) & 0x1F;
+
+	printf("sll %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue src = IRValue(IRValue::Reg);
+	IRValue shift = IRValue(IRValue::Imm);
+	
+	dest.SetReg(rd);
+	src.SetReg(rt);
+	shift.SetImm32Unsigned(sa);
+
+	i = IRInstruction::Build({dest, src, shift}, IRInstrs::Shift);
+	i.is_logical = true;
+	i.direction = IRInstruction::Left;
+
+	cur_block->ir.push_back(i);
+}
+
 void JIT::EmitJR(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	printf("jr\n");
@@ -216,6 +279,26 @@ void JIT::EmitJALR(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	i = IRInstruction::Build({src, link}, IRInstrs::JumpAlways);
 	i.should_link = true;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitOR(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	printf("or %s, %s, %s\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::Reg(rd));
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue source2 = IRValue(IRValue::Reg);
+	source.SetReg(rs);
+	dest.SetReg(rt);
+	source2.SetReg(rd);
+
+	i = IRInstruction::Build({dest, source, source2}, IRInstrs::OR);
 
 	cur_block->ir.push_back(i);
 }
@@ -307,7 +390,10 @@ void JIT::EmitIR(uint32_t instr)
 	{
 		opcode = instr & 0x3F;
 		switch (opcode)
-		{			
+		{		
+		case 0x00:
+			EmitSLL(instr, current_instruction);
+			break;	
 		case 0x08:
 			EmitJR(instr, current_instruction);
 			break;
@@ -316,6 +402,9 @@ void JIT::EmitIR(uint32_t instr)
 			break;
 		case 0x0F:
 			printf("sync\n");
+			break;
+		case 0x25:
+			EmitOR(instr, current_instruction);
 			break;
 		case 0x2D:
 			EmitDADDU(instr, current_instruction);
@@ -331,6 +420,9 @@ void JIT::EmitIR(uint32_t instr)
 	case 0x03:
 		EmitJAL(instr, current_instruction);
 		break;
+	case 0x04:
+		EmitBEQ(instr, current_instruction);
+		break;
 	case 0x05:
 		EmitBNE(instr, current_instruction);
 		break;
@@ -339,6 +431,9 @@ void JIT::EmitIR(uint32_t instr)
 		break;
 	case 0x0A:
 		EmitSLTI(instr, current_instruction);
+		break;
+	case 0x0C:
+		EmitANDI(instr, current_instruction);
 		break;
 	case 0x0D:
 		EmitORI(instr, current_instruction);
@@ -421,7 +516,9 @@ bool IsBranch(uint32_t instr)
 		}
 		break;
 	}
+	case 0x02:
 	case 0x03:
+	case 0x04:
 	case 0x05:
 		return true;
 	default:

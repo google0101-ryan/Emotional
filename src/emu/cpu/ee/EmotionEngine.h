@@ -24,6 +24,8 @@ enum IRInstrs
 	Add = 9,
 	MemoryStore = 10,
 	JumpImm = 11, // We have to do some fancy or'ing for JAL, J
+	AND = 12,
+	Shift = 13,
 };
 
 struct IRValue
@@ -72,10 +74,18 @@ struct IRInstruction
 	std::vector<IRValue> args;
 
 	bool should_link = false;
+	bool is_logical = false;
+
+	enum Direction
+	{
+		Left,
+		Right
+	} direction;
 	
 	enum BranchType
 	{
 		NE = 0,
+		EQ = 1,
 	} b_type;
 
 	enum AccessSize
@@ -116,17 +126,21 @@ private:
 	std::vector<Block*> blockCache;
 
 	void EmitJAL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
+	void EmitBEQ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x04
 	void EmitBNE(uint32_t instr, EE_JIT::IRInstruction& i);  // 0x05
 	void EmitADDIU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x09
 	void EmitSLTI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0A
+	void EmitANDI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0C
 	void EmitORI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0D
 	void EmitLUI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0F
 	void EmitCOP0(uint32_t instr, EE_JIT::IRInstruction& i); // 0x10
 	void EmitSW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2B
 	void EmitSD(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3f
 
+	void EmitSLL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
 	void EmitJR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x08
 	void EmitJALR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x09
+	void EmitOR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x25
 	void EmitDADDU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2D
 
 	void EmitMFC0(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
@@ -151,6 +165,8 @@ struct ProcessorState
 	uint128_t regs[32];
 	uint32_t cop0_regs[32];
 	uint32_t pc, next_pc;
+	uint32_t hi1, hi;
+	uint32_t lo1, lo;
 };
 
 void Reset();
