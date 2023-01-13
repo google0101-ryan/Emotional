@@ -4,6 +4,15 @@
 #include "System.h"
 #include <emu/memory/Bus.h>
 #include <emu/cpu/ee/EmotionEngine.h>
+#include <emu/sched/scheduler.h>
+
+Scheduler::Event vsync_event;
+
+void HandleVsync()
+{
+	printf("Vsync\n");
+	Scheduler::ScheduleEvent(vsync_event);
+}
 
 void System::LoadBios(std::string biosName)
 {
@@ -31,13 +40,22 @@ void System::LoadBios(std::string biosName)
 
 void System::Reset()
 {
+	Scheduler::InitScheduler();
 	EmotionEngine::Reset();
+
+	vsync_event.func = HandleVsync;
+	vsync_event.name = "VSYNC handler";
+	vsync_event.cycles_from_now = 4920115;
+	Scheduler::ScheduleEvent(vsync_event);
 }
 
 void System::Run()
 {
 	while (1)
-		EmotionEngine::Clock();
+	{
+		int cycles = EmotionEngine::Clock();
+		Scheduler::CheckScheduler(cycles);
+	}
 }
 
 void System::Dump()

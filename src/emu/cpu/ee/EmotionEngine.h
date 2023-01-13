@@ -24,6 +24,8 @@ enum IRInstrs
 	Add = 9,
 	MemoryStore = 10,
 	JumpImm = 11, // We have to do some fancy or'ing for JAL, J
+	AND = 12,
+	Shift = 13,
 };
 
 struct IRValue
@@ -92,6 +94,11 @@ struct IRInstruction
 		Size32
 	} size = Size32;
 
+	enum ShiftType
+	{
+		LeftLogical,
+	} shift_type;
+
 	static IRInstruction Build(std::vector<IRValue> args, uint8_t i_type)
 	{
 		IRInstruction i;
@@ -119,12 +126,14 @@ private:
 	void EmitBNE(uint32_t instr, EE_JIT::IRInstruction& i);  // 0x05
 	void EmitADDIU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x09
 	void EmitSLTI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0A
+	void EmitANDI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0C
 	void EmitORI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0D
 	void EmitLUI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0F
 	void EmitCOP0(uint32_t instr, EE_JIT::IRInstruction& i); // 0x10
 	void EmitSW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2B
 	void EmitSD(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3f
 
+	void EmitSLL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
 	void EmitJR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x08
 	void EmitJALR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x09
 	void EmitDADDU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2D
@@ -154,7 +163,7 @@ struct ProcessorState
 };
 
 void Reset();
-void Clock();
+int Clock();
 void Dump();
 ProcessorState* GetState();
 

@@ -83,6 +83,25 @@ void JIT::EmitSLTI(uint32_t instr, EE_JIT::IRInstruction &i)
 	cur_block->ir.push_back(i);
 }
 
+void JIT::EmitANDI(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	printf("andi %s, %s, 0x%04x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), instr & 0xffff);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue imm = IRValue(IRValue::Imm);
+	source.SetReg(rs);
+	dest.SetReg(rt);
+	imm.SetImmUnsigned(instr & 0xffff);
+
+	i = IRInstruction::Build({dest, source, imm}, IRInstrs::AND);
+
+	cur_block->ir.push_back(i);
+}
+
 void JIT::EmitORI(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	int rt = (instr >> 16) & 0x1F;
@@ -185,6 +204,11 @@ void JIT::EmitSD(uint32_t instr, EE_JIT::IRInstruction &i)
 	i.access_size = IRInstruction::U64;
 
 	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitSLL(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	
 }
 
 void JIT::EmitJR(uint32_t instr, EE_JIT::IRInstruction &i)
@@ -307,7 +331,7 @@ void JIT::EmitIR(uint32_t instr)
 	{
 		opcode = instr & 0x3F;
 		switch (opcode)
-		{			
+		{
 		case 0x08:
 			EmitJR(instr, current_instruction);
 			break;
@@ -339,6 +363,9 @@ void JIT::EmitIR(uint32_t instr)
 		break;
 	case 0x0A:
 		EmitSLTI(instr, current_instruction);
+		break;
+	case 0x0C:
+		EmitANDI(instr, current_instruction);
 		break;
 	case 0x0D:
 		EmitORI(instr, current_instruction);
@@ -429,7 +456,7 @@ bool IsBranch(uint32_t instr)
 	}
 }
 
-void Clock()
+int Clock()
 {
 	jit.EmitPrequel(state.pc);
 
@@ -438,6 +465,8 @@ void Clock()
 
 	uint32_t pc = state.pc;
 	uint32_t next_pc = state.next_pc;
+
+	int cycles = 0;
 
 	do
 	{
@@ -449,10 +478,14 @@ void Clock()
 
 		isBranch = isBranchDelayed;
 		isBranchDelayed = IsBranch(instr);
+
+		cycles += 2;
 	} while (!isBranch);
 
 	auto func = jit.EmitDone();
 	func();
+
+	return cycles;
 }
 
 void Dump()

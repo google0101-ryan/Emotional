@@ -21,7 +21,8 @@ set(SOURCES src/main.cpp
             src/emu/System.cpp
 			src/emu/cpu/ee/EmotionEngine.cpp
 			src/emu/cpu/ee/x64/reg_alloc.cpp
-			src/emu/cpu/ee/x64/emit.cpp)
+			src/emu/cpu/ee/x64/emit.cpp
+			src/emu/sched/scheduler.cpp)
 
 set(CMAKE_BUILD_TYPE Debug)
 
