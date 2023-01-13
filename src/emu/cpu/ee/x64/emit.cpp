@@ -6,6 +6,7 @@
 #include <emu/cpu/ee/EmotionEngine.h>
 #include <emu/memory/Bus.h>
 #include <fstream>
+#include <cassert>
 
 EE_JIT::Emitter* EE_JIT::emit;
 
@@ -98,7 +99,7 @@ void EE_JIT::Emitter::EmitBC(IRInstruction i)
 	Xbyak::Reg64 ee_reg2_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
 	Xbyak::Reg64 ee_reg1_value = Xbyak::Reg64(reg_alloc->AllocHostRegister());
 	Xbyak::Reg64 ee_reg2_value = Xbyak::Reg64(reg_alloc->AllocHostRegister());
-	Xbyak::Reg32 next_pc = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+	Xbyak::Reg64 next_pc = Xbyak::Reg64(reg_alloc->AllocHostRegister());
 	auto reg1_offset = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[0].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u64)));
 	auto reg2_offset = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[1].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u64)));
 	
@@ -112,6 +113,12 @@ void EE_JIT::Emitter::EmitBC(IRInstruction i)
 	if (i.b_type == IRInstruction::NE)
 	{
 		cg->je(conditional_failed);
+		cg->lea(next_pc, cg->ptr[cg->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)]);
+		cg->add(cg->dword[next_pc], i.args[2].GetImm() << 2);
+	}
+	else if (i.b_type == IRInstruction::EQ)
+	{
+		cg->jne(conditional_failed);
 		cg->lea(next_pc, cg->ptr[cg->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)]);
 		cg->add(cg->dword[next_pc], i.args[2].GetImm() << 2);
 	}
@@ -152,6 +159,31 @@ void EE_JIT::Emitter::EmitOR(IRInstruction i)
 		cg->lea(src_ptr, cg->ptr[cg->rbp + src_offset]);
 		cg->mov(src_value, cg->dword[src_ptr]);
 		cg->or_(src_value, i.args[2].GetImm());
+		cg->lea(dest_ptr, cg->ptr[cg->rbp + dest_offset]);
+		cg->mov(cg->dword[dest_ptr], src_value);
+	}
+	else
+	{
+		printf("[emu/JIT]: Unknown OR argument\n");
+		exit(1);
+	}
+}
+
+void EE_JIT::Emitter::EmitAND(IRInstruction i)
+{
+	if (i.args[2].IsImm())
+	{
+		Xbyak::Reg64 src_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+		Xbyak::Reg64 dest_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+		Xbyak::Reg32 src_value = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+
+		auto src_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[1].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+		auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+
+
+		cg->lea(src_ptr, cg->ptr[cg->rbp + src_offset]);
+		cg->mov(src_value, cg->dword[src_ptr]);
+		cg->and_(src_value, i.args[2].GetImm());
 		cg->lea(dest_ptr, cg->ptr[cg->rbp + dest_offset]);
 		cg->mov(cg->dword[dest_ptr], src_value);
 	}
@@ -336,6 +368,36 @@ void EE_JIT::Emitter::EmitMemoryStore(IRInstruction i)
 	cg->call(func_ptr);
 }
 
+void EE_JIT::Emitter::EmitShift(IRInstruction i)
+{
+	if (i.args[2].IsImm())
+	{
+		Xbyak::Reg32 ee_src_value = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+		auto src_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[1].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+		auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+
+		cg->mov(ee_src_value, cg->dword[cg->rbp + src_offset]);
+		
+		assert(i.direction == IRInstruction::Left);
+
+		if (i.is_logical)
+		{
+			cg->shl(ee_src_value, i.args[2].GetImm());
+		}
+		else
+		{
+			cg->sal(ee_src_value, i.args[2].GetImm());
+		}
+
+		cg->mov(cg->dword[cg->rbp + dest_offset], ee_src_value);
+	}
+	else
+	{
+		printf("[emu/JIT]: Unknown SHIFT argument\n");
+		exit(1);
+	}
+}
+
 void EE_JIT::Emitter::EmitSaveHostRegs()
 {
 	sizeWithoutCurBlock = cg->getSize();
@@ -398,8 +460,14 @@ void EE_JIT::Emitter::EmitIR(IRInstruction i)
 	case JumpImm:
 		EmitJumpImm(i);
 		break;
+	case AND:
+		EmitAND(i);
+		break;
+	case Shift:
+		EmitShift(i);
+		break;
 	default:
-		printf("[JIT/Emit]: Unknown IR instruction 0x%02x\n", i.instr);
+		printf("[JIT/Emit]: Unknown IR instruction %d\n", i.instr);
 		exit(1);
 	}
 }
