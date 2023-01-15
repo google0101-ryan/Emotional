@@ -31,6 +31,7 @@ private:
 	void EmitBC(IRInstruction i);
 	void EmitIncPC(IRInstruction i);
 	void EmitOR(IRInstruction i);
+	void EmitXOR(IRInstruction i);
 	void EmitAND(IRInstruction i);
 	void EmitJA(IRInstruction i);
 	void EmitJumpImm(IRInstruction i);
@@ -39,6 +40,7 @@ private:
 	void EmitMemoryStore(IRInstruction i);
 	void EmitMemoryLoad(IRInstruction i);
 	void EmitShift(IRInstruction i);
+	void EmitShift64(IRInstruction i);
 	void EmitMULT(IRInstruction i);
 	void EmitDIV(IRInstruction i);
 	void EmitUhOh(IRInstruction i);
@@ -46,10 +48,19 @@ private:
 	void EmitMoveFromLo(IRInstruction i);
 	void EmitMoveFromHi(IRInstruction i);
 	void EmitBranchRegImm(IRInstruction i);
+	void EmitUpdateCopCount(IRInstruction i);
+	void EmitPOR(IRInstruction i);
 public:
 	Emitter();
 	void Dump();
 	void TranslateBlock(Block* block);
+
+	void ResetFreeBase()
+	{
+		free_base = base;
+		delete cg;
+		cg = new Xbyak::CodeGenerator(0xffffffff, base);
+	}
 
 	const uint8_t* GetFreeBase();
 };

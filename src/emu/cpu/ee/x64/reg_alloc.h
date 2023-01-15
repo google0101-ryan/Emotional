@@ -12,6 +12,7 @@ private:
 	std::array<bool, 8> used_registers;
 	// Due to how 8-bit registers map, we have a seperate array
 	std::array<bool, 8> used_registers_8;
+	std::array<bool, 8> used_xmm_registers;
 
 public:
 	enum HostRegisters64
@@ -30,5 +31,6 @@ public:
 	void Reset();
 
 	int AllocHostRegister();
+	int AllocHostXMMRegister();
 	void MarkRegUsed(int reg);
 };

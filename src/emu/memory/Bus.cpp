@@ -6,13 +6,19 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <emu/cpu/ee/EmotionEngine.h>
+#include <emu/gpu/gif.hpp>
+#include <emu/gpu/gs.h>
 
 uint8_t BiosRom[0x400000];
 uint8_t spr[0x4000];
 uint8_t ram[0x2000000];
+uint8_t iop_ram[0x200000];
 
 uint32_t MCH_DRD, MCH_RICM;
 uint32_t rdram_sdevid;
+
+uint32_t INTC_MASK = 0, INTC_STAT = 0;
 
 static uint32_t Translate(uint32_t addr)
 {
@@ -67,6 +73,17 @@ void Bus::Dump()
 	dump.close();
 }
 
+uint128_t Bus::Read128(uint32_t addr)
+{
+	addr = Translate(addr);
+
+	if (addr < 0x2000000)
+		return {*(__uint128_t*)&ram[addr]};
+	
+	printf("Read128 from unknown address 0x%08x\n", addr);
+	exit(1);
+}
+
 uint64_t Bus::Read64(uint32_t addr)
 {
 	addr = Translate(addr);
@@ -75,6 +92,8 @@ uint64_t Bus::Read64(uint32_t addr)
 		return *(uint64_t*)&BiosRom[addr - 0x1fc00000];
 	if (addr >= 0x70000000 && addr < 0x70004000)
 		return *(uint64_t*)&spr[addr - 0x70000000];
+	if (addr < 0x2000000)
+		return *(uint64_t*)&ram[addr];
 	
 	printf("Read64 from unknown address 0x%08x\n", addr);
 	exit(1);
@@ -84,20 +103,31 @@ uint32_t Bus::Read32(uint32_t addr)
 {
 	addr = Translate(addr);
 
+	
+
 	if (addr >= 0x1fc00000 && addr < 0x20000000)
 		return *(uint32_t*)&BiosRom[addr - 0x1fc00000];
 	if (addr >= 0x70000000 && addr < 0x70004000)
 		return *(uint32_t*)&spr[addr - 0x70000000];
+	if (addr < 0x2000000)
+		return *(uint32_t*)&ram[addr];
+	if (addr >= 0x1C000000 && addr < 0x1C200000)
+		return *(uint32_t*)&iop_ram[addr - 0x1C000000];
 
 	switch (addr)
 	{
 	case 0x1000f130:
+	case 0x1000f400:
+	case 0x1000f410:
 	case 0x1000f430:
+	case 0x1f80141c:
 		return 0;
+	case 0x1000f010:
+		return INTC_MASK;
 	case 0x1000f440:
 	{
 		uint8_t SOP = (MCH_RICM >> 6) & 0xF;
-		uint8_t SA = (MCH_RICM >> 16) & 0xFFF;
+		uint16_t SA = (MCH_RICM >> 16) & 0xFFF;
 		if (!SOP)
 		{
 			switch (SA)
@@ -119,6 +149,8 @@ uint32_t Bus::Read32(uint32_t addr)
 		}
 		return 0;
 	}
+	case 0x10003020:
+		return GIF::ReadStat();
 	}
 	
 	printf("Read32 from unknown address 0x%08x\n", addr);
@@ -147,8 +179,39 @@ uint8_t Bus::Read8(uint32_t addr)
 		return BiosRom[addr - 0x1fc00000];
 	if (addr >= 0x70000000 && addr < 0x70004000)
 		return spr[addr - 0x70000000];
+	if (addr < 0x2000000)
+		return ram[addr];
+	
+	switch (addr)
+	{
+	case 0x1f803204:
+		return 0;
+	}
 	
 	printf("Read from unknown address 0x%08x\n", addr);
+	exit(1);
+}
+
+void Bus::Write128(uint32_t addr, uint128_t data)
+{
+	addr = Translate(addr);
+
+	EmotionEngine::MarkDirty(addr, sizeof(data));
+
+	if (addr < 0x2000000)
+	{
+		*(__uint128_t*)&ram[addr] = data.u128;
+		return;
+	}
+
+	switch (addr)
+	{
+	case 0x10006000:
+		GIF::WriteFIFO(data);
+		return;
+	}
+
+	printf("Write128 to unknown address 0x%08x\n", addr);
 	exit(1);
 }
 
@@ -156,9 +219,23 @@ void Bus::Write64(uint32_t addr, uint64_t data)
 {
 	addr = Translate(addr);
 
+	EmotionEngine::MarkDirty(addr, sizeof(data));
+
 	if (addr >= 0x70000000 && addr < 0x70004000)
 	{
 		*(uint64_t*)&spr[addr - 0x70000000] = data;
+		return;
+	}
+	if (addr < 0x2000000)
+	{
+		*(uint64_t*)&ram[addr] = data;
+		return;
+	}
+
+	switch (addr)
+	{
+	case 0x12001000:
+		GS::WriteGSCSR(data);
 		return;
 	}
 
@@ -169,10 +246,17 @@ void Bus::Write64(uint32_t addr, uint64_t data)
 void Bus::Write32(uint32_t addr, uint32_t data)
 {
 	addr = Translate(addr);
+
+	EmotionEngine::MarkDirty(addr, sizeof(data));
 	
 	if (addr >= 0x70000000 && addr < 0x70004000)
 	{
 		*(uint32_t*)&spr[addr - 0x70000000] = data;
+		return;
+	}
+	if (addr < 0x2000000)
+	{
+		*(uint32_t*)&ram[addr] = data;
 		return;
 	}
 
@@ -182,9 +266,17 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 	case 0x1000f120:
 	case 0x1000f140:
 	case 0x1000f150:
+	case 0x1000f400:
 	case 0x1000f410:
+	case 0x1000f420:
+	case 0x1000f450:
+	case 0x1000f460:
 	case 0x1000f480:
 	case 0x1000f490:
+	case 0x1f80141c:
+		return;
+	case 0x1000f010:
+		INTC_MASK = data;
 		return;
 	case 0x1000f500: // EE TLB enable?
 		return;
@@ -202,6 +294,10 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 	case 0x1000f440:
 		MCH_DRD = data;
 		return;
+	// GIF
+	case 0x10003000:
+		GIF::WriteCtrl32(data);
+		return;
 	}
 
 	printf("Write32 to unknown address 0x%08x\n", addr);
@@ -211,12 +307,17 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 void Bus::Write16(uint32_t addr, uint16_t data)
 {
 	addr = Translate(addr);
+
+	EmotionEngine::MarkDirty(addr, sizeof(data));
 	
 	if (addr >= 0x70000000 && addr < 0x70004000)
 	{
 		*(uint16_t*)&spr[addr - 0x70000000] = data;
 		return;
 	}
+
+	if ((addr & 0xFF000000) == 0x1A000000)
+		return;
 
 	printf("Write16 to unknown address 0x%08x\n", addr);
 	exit(1);
@@ -226,9 +327,16 @@ void Bus::Write8(uint32_t addr, uint8_t data)
 {
 	addr = Translate(addr);
 
+	EmotionEngine::MarkDirty(addr, sizeof(data));
+
 	if (addr >= 0x70000000 && addr < 0x70004000)
 	{
 		spr[addr - 0x70000000] = data;
+		return;
+	}
+	if (addr < 0x2000000)
+	{
+		ram[addr] = data;
 		return;
 	}
 

@@ -13,10 +13,11 @@ RegisterAllocator::RegisterAllocator()
 
 void RegisterAllocator::Reset()
 {
+	used_xmm_registers.fill(false);
 	used_registers.fill(false);
 	used_registers_8.fill(false);
-	used_registers[RBP] = true;
-	used_registers[RSP] = true;
+	MarkRegUsed(RBP);
+	MarkRegUsed(RSP);
 }
 
 int RegisterAllocator::AllocHostRegister()
@@ -37,6 +38,21 @@ int RegisterAllocator::AllocHostRegister()
 	}
 
 	printf("[JIT/RegAlloc]: Ran out of host registers!\n");
+	exit(1);
+}
+
+int RegisterAllocator::AllocHostXMMRegister()
+{
+	for (int i = 0; i < 8; i++)
+	{
+		if (!used_xmm_registers[i])
+		{
+			used_xmm_registers[i] = true;
+			return i;
+		}
+	}
+
+	printf("[JIT/RegAlloc]: Ran out of host xmm registers!\n");
 	exit(1);
 }
 

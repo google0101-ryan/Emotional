@@ -10,7 +10,6 @@ int Application::exit_code = 0;
 
 void Sig(int)
 {
-    printf("Segfault\n");
     Application::Exit();
 }
 
@@ -32,6 +31,7 @@ bool Application::Init(int argc, char** argv)
     std::atexit(Application::Exit);
     // signal(SIGSEGV, Sig);
     signal(SIGINT, Application::Exit);
+    signal(SIGABRT, Application::Exit);
     
     isRunning = true;
 

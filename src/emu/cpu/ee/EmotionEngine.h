@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <unordered_map>
 #include <util/uint128.h>
 
 namespace EE_JIT
@@ -36,6 +37,10 @@ enum IRInstrs
 	Sub = 21,
 	MovCond = 22,
 	Div1 = 23,
+	Shift64 = 24,
+	XOR = 25,
+	UpdateCopCount = 26,
+	POR = 27,
 };
 
 struct IRValue
@@ -80,6 +85,7 @@ public:
 
 struct IRInstruction
 {
+	// The IR instruction
 	uint8_t instr;
 	// Arguments are left -> right
 	std::vector<IRValue> args;
@@ -90,12 +96,14 @@ struct IRInstruction
 	bool is_likely = false;
 	bool is_mmi_divmul = false;
 
+	// Shift direction
 	enum Direction
 	{
 		Left,
 		Right
 	} direction;
 	
+	// Branch condition
 	enum BranchType
 	{
 		NE = 0,
@@ -106,19 +114,21 @@ struct IRInstruction
 		LT = 5,
 	} b_type;
 
+	// MOVN, MOVZ
 	enum class MovCond : int
 	{
 		N = 1,
 		Z = 2,
 	} mov_cond;
 
+	// Memory access sizes
 	enum AccessSize
 	{
 		U64 = 0,
 		U32 = 1,
 		U16 = 2,
 		U8 = 3,
-		S8 = 4,
+		U128 = 4,
 	} access_size;
 
 	enum InstrSize // ADDIU vs DADDIU, etc
@@ -126,11 +136,6 @@ struct IRInstruction
 		Size64,
 		Size32
 	} size = Size32;
-
-	enum ShiftType
-	{
-		LeftLogical,
-	} shift_type;
 
 	static IRInstruction Build(std::vector<IRValue> args, uint8_t i_type)
 	{
@@ -144,8 +149,8 @@ struct IRInstruction
 
 struct Block
 {
-	uint32_t guest_start;
 	uint8_t* entry;
+	uint32_t guest_addr;
 	std::vector<IRInstruction> ir;
 	size_t cycles;
 };
@@ -154,7 +159,7 @@ class JIT
 {
 private:
 	Block* cur_block;
-	std::vector<Block*> blockCache;
+	std::unordered_map<uint32_t, Block*> blockCache;
 
 	void EmitJ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
 	void EmitJAL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x03
@@ -167,11 +172,16 @@ private:
 	void EmitSLTIU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0B
 	void EmitANDI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0C
 	void EmitORI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0D
+	void EmitXORI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0E
 	void EmitLUI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0F
 	void EmitCOP0(uint32_t instr, EE_JIT::IRInstruction& i); // 0x10
 	void EmitBEQL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x14
 	void EmitBNEL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x15
+	void EmitDADDIU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x19
+	void EmitLQ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1f
+	void EmitSQ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1f
 	void EmitLB(uint32_t instr, EE_JIT::IRInstruction& i); // 0x20
+	void EmitLH(uint32_t instr, EE_JIT::IRInstruction& i); // 0x21
 	void EmitLW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x23
 	void EmitLBU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x24
 	void EmitLHU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x25
@@ -184,13 +194,17 @@ private:
 
 	void EmitSLL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
 	void EmitSRL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
-	void EmitSRA(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
+	void EmitSRA(uint32_t instr, EE_JIT::IRInstruction& i); // 0x03
+	void EmitSLLV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x04
 	void EmitJR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x08
 	void EmitJALR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x09
+	void EmitMOVZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0A
 	void EmitMOVN(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0B
 	void EmitBreak(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0D
 	void EmitMFHI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x10
 	void EmitMFLO(uint32_t instr, EE_JIT::IRInstruction& i); // 0x12
+	void EmitDSLLV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x14
+	void EmitDSRAV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x17
 	void EmitMULT(uint32_t instr, EE_JIT::IRInstruction& i); // 0x18
 	void EmitDIV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1a
 	void EmitDIVU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1b
@@ -201,12 +215,17 @@ private:
 	void EmitSLT(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2A
 	void EmitSLTU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2B
 	void EmitDADDU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2D
+	void EmitDSLL32(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3C
+	void EmitDSRA32(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3F
 	
 	void EmitBLTZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
 	void EmitBGEZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x01
 	
 	void EmitMFLO1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x12
+	void EmitMULT1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x18
 	void EmitDIVU1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1B
+
+	void EmitPOR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x05
 
 	void EmitMFC0(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
 	void EmitMTC0(uint32_t instr, EE_JIT::IRInstruction& i); // 0x04
@@ -221,6 +240,9 @@ public:
 	Block* GetExistingBlock(uint32_t start);
 
 	bool DoesBlockExist(uint32_t addr);
+	void CheckCacheFull();
+
+	void MarkDirty(uint32_t address, uint32_t size);
 };
 
 }
@@ -249,6 +271,7 @@ void Reset();
 int Clock();
 void Dump();
 ProcessorState* GetState();
+void MarkDirty(uint32_t address, uint32_t size);
 
 inline const char* Reg(int index)
     {
