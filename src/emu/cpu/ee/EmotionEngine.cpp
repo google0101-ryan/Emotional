@@ -5,8 +5,28 @@
 #include <emu/memory/Bus.h>
 #include <emu/cpu/ee/x64/emit.h>
 
+namespace EmotionEngine
+{
+	ProcessorState state;
+}
+
 namespace EE_JIT
 {
+
+void JIT::EmitJ(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	printf("j 0x%08x\n", (instr & 0x3ffffff) << 2);
+
+	uint32_t target_address = (instr & 0x3FFFFFF) << 2;
+
+	IRValue imm = IRValue(IRValue::Imm);
+	imm.SetImm32Unsigned(target_address);
+
+	i = IRInstruction::Build({imm}, IRInstrs::JumpImm);
+	i.should_link = false;
+
+	cur_block->ir.push_back(i);
+}
 
 void JIT::EmitJAL(uint32_t instr, EE_JIT::IRInstruction &i)
 {
@@ -25,19 +45,20 @@ void JIT::EmitJAL(uint32_t instr, EE_JIT::IRInstruction &i)
 
 void JIT::EmitBEQ(uint32_t instr, EE_JIT::IRInstruction &i)
 {
-	printf("beq\n");
-
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
+
+	int32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
+	
+	printf("beq %s, %s, 0x%08x (%x)\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
 	IRValue imm = IRValue(IRValue::Imm);
 
-
 	source.SetReg(rs);
 	dest.SetReg(rt);
-	imm.SetImm(instr & 0xffff);
+	imm.SetImm32((int32_t)(int16_t)(instr & 0xffff) << 2);
 
 	i = IRInstruction::Build({dest, source, imm}, IRInstrs::BranchConditional);
 	i.b_type = IRInstruction::BranchType::EQ;
@@ -46,10 +67,11 @@ void JIT::EmitBEQ(uint32_t instr, EE_JIT::IRInstruction &i)
 
 void JIT::EmitBNE(uint32_t instr, EE_JIT::IRInstruction &i)
 {
-	printf("bne\n");
-
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
+	uint32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
+
+	printf("bne %s, %s, 0x%08x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -58,10 +80,50 @@ void JIT::EmitBNE(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	source.SetReg(rs);
 	dest.SetReg(rt);
-	imm.SetImm(instr & 0xffff);
+	imm.SetImm32((int32_t)(int16_t)(instr & 0xffff) << 2);
 
 	i = IRInstruction::Build({dest, source, imm}, IRInstrs::BranchConditional);
 	i.b_type = IRInstruction::BranchType::NE;
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitBLEZ(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rs = (instr >> 21) & 0x1F;
+
+	int32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
+	
+	printf("blez %s, 0x%08x (%x)\n", EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue imm = IRValue(IRValue::Imm);
+
+	dest.SetReg(rs);
+	imm.SetImm32((int32_t)(int16_t)(instr & 0xffff) << 2);
+
+	i = IRInstruction::Build({dest, imm}, IRInstrs::BranchRegImm);
+	i.b_type = IRInstruction::BranchType::LE;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitBGTZ(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rs = (instr >> 21) & 0x1F;
+
+	int32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
+	
+	printf("bgtz %s, 0x%08x (%x)\n", EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue imm = IRValue(IRValue::Imm);
+
+	dest.SetReg(rs);
+	imm.SetImm32((int32_t)(int16_t)(instr & 0xffff) << 2);
+
+	i = IRInstruction::Build({dest, imm}, IRInstrs::BranchRegImm);
+	i.b_type = IRInstruction::BranchType::GT;
+
 	cur_block->ir.push_back(i);
 }
 
@@ -78,7 +140,7 @@ void JIT::EmitADDIU(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	source.SetReg(rs);
 	dest.SetReg(rt);
-	imm.SetImm(instr & 0xffff);
+	imm.SetImm((int32_t)(int16_t)(instr & 0xffff));
 
 	i = IRInstruction::Build({dest, source, imm}, IRInstrs::Add);
 	i.size = IRInstruction::Size32;
@@ -87,19 +149,42 @@ void JIT::EmitADDIU(uint32_t instr, EE_JIT::IRInstruction &i)
 
 void JIT::EmitSLTI(uint32_t instr, EE_JIT::IRInstruction &i)
 {
-	printf("slti\n");
-
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
+	
+	printf("slti %s, %s, 0x%02x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), (int32_t)(int16_t)(instr & 0xffff));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
 	IRValue imm = IRValue(IRValue::Imm);
 	source.SetReg(rs);
 	dest.SetReg(rt);
-	imm.SetImm(instr & 0xffff);
+	imm.SetImm((int32_t)(int16_t)(instr & 0xffff));
 
 	i = IRInstruction::Build({dest, source, imm}, IRInstrs::SLTI);
+	i.is_unsigned = false;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitSLTIU(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+	uint16_t i_ = instr & 0xffff;
+	
+	printf("sltiu %s, %s, 0x%04x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), i_);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue imm = IRValue(IRValue::Imm);
+
+	source.SetReg(rs);
+	dest.SetReg(rt);
+	imm.SetImm((int32_t)(int16_t)(instr & 0xffff));
+
+	i = IRInstruction::Build({dest, source, imm}, IRInstrs::SLTI);
+	i.is_unsigned = true;
 
 	cur_block->ir.push_back(i);
 }
@@ -151,7 +236,7 @@ void JIT::EmitLUI(uint32_t instr, EE_JIT::IRInstruction &i)
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue imm = IRValue(IRValue::Imm);
 	dest.SetReg(rt);
-	imm.SetImm32((instr & 0xffff) << 16);
+	imm.SetImm32(((int32_t)(int16_t)(instr & 0xffff)) << 16);
 
 	i = IRInstruction::Build({dest, imm}, IRInstrs::MOV);
 
@@ -183,16 +268,243 @@ void JIT::EmitCOP0(uint32_t instr, EE_JIT::IRInstruction &i)
 	}
 }
 
-void JIT::EmitSW(uint32_t instr, EE_JIT::IRInstruction &i)
+void JIT::EmitBEQL(uint32_t instr, EE_JIT::IRInstruction &i)
 {
-	printf("sw\n");
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+	int32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
 
+	printf("beql %s, %s, 0x%08x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue imm = IRValue(IRValue::Imm);
+
+
+	source.SetReg(rs);
+	dest.SetReg(rt);
+	imm.SetImm32((int32_t)(int16_t)(instr & 0xffff) << 2);
+
+	i = IRInstruction::Build({dest, source, imm}, IRInstrs::BranchConditional);
+	i.b_type = IRInstruction::BranchType::EQ;
+	i.is_likely = true;
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitBNEL(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+	uint32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
+
+	printf("bnel %s, %s, 0x%08x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue imm = IRValue(IRValue::Imm);
+
+
+	source.SetReg(rs);
+	dest.SetReg(rt);
+	imm.SetImm32((int32_t)(int16_t)(instr & 0xffff) << 2);
+
+	i = IRInstruction::Build({dest, source, imm}, IRInstrs::BranchConditional);
+	i.b_type = IRInstruction::BranchType::NE;
+	i.is_likely = true;
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitLB(uint32_t instr, EE_JIT::IRInstruction &i)
+{
 	int _rt = (instr >> 16) & 0x1F;
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 
+	printf("lb %s, %d(%s) (0x%08x)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base), EmotionEngine::state.regs[_base].u32[0] + _offset);
+
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
+	IRValue offset = IRValue(IRValue::Imm);
+
+	base.SetReg(_base);
+	rt.SetReg(_rt);
+	offset.SetImm(_offset);
+
+	i = IRInstruction::Build({rt, offset, base}, IRInstrs::MemoryLoad);
+	i.access_size = IRInstruction::S8;
+	i.is_unsigned = false;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitLW(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int _rt = (instr >> 16) & 0x1F;
+	int _base = (instr >> 21) & 0x1F;
+	int32_t _offset = (int16_t)(instr & 0xffff);
+
+	printf("lw %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
+	IRValue base = IRValue(IRValue::Reg);
+	IRValue rt = IRValue(IRValue::Reg);
+	IRValue offset = IRValue(IRValue::Imm);
+
+	base.SetReg(_base);
+	rt.SetReg(_rt);
+	offset.SetImm(_offset);
+
+	i = IRInstruction::Build({rt, offset, base}, IRInstrs::MemoryLoad);
+	i.access_size = IRInstruction::U32;
+	i.is_unsigned = true;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitLBU(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int _rt = (instr >> 16) & 0x1F;
+	int _base = (instr >> 21) & 0x1F;
+	int32_t _offset = (int16_t)(instr & 0xffff);
+
+	printf("lbu %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
+	IRValue base = IRValue(IRValue::Reg);
+	IRValue rt = IRValue(IRValue::Reg);
+	IRValue offset = IRValue(IRValue::Imm);
+
+	base.SetReg(_base);
+	rt.SetReg(_rt);
+	offset.SetImm(_offset);
+
+	i = IRInstruction::Build({rt, offset, base}, IRInstrs::MemoryLoad);
+	i.access_size = IRInstruction::S8;
+	i.is_unsigned = true;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitLHU(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int _rt = (instr >> 16) & 0x1F;
+	int _base = (instr >> 21) & 0x1F;
+	int32_t _offset = (int16_t)(instr & 0xffff);
+
+	printf("lhu %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
+	IRValue base = IRValue(IRValue::Reg);
+	IRValue rt = IRValue(IRValue::Reg);
+	IRValue offset = IRValue(IRValue::Imm);
+
+	base.SetReg(_base);
+	rt.SetReg(_rt);
+	offset.SetImm(_offset);
+
+	i = IRInstruction::Build({rt, offset, base}, IRInstrs::MemoryLoad);
+	i.access_size = IRInstruction::U16;
+	i.is_unsigned = true;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitSB(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int _rt = (instr >> 16) & 0x1F;
+	int _base = (instr >> 21) & 0x1F;
+	int32_t _offset = (int16_t)(instr & 0xffff);
+	
+	printf("sb %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
+	IRValue base = IRValue(IRValue::Reg);
+	IRValue rt = IRValue(IRValue::Reg);
+	IRValue offset = IRValue(IRValue::Imm);
+
+	base.SetReg(_base);
+	rt.SetReg(_rt);
+	offset.SetImm(_offset);
+
+	i = IRInstruction::Build({rt, offset, base}, IRInstrs::MemoryStore);
+	i.access_size = IRInstruction::U8;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitSH(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int _rt = (instr >> 16) & 0x1F;
+	int _base = (instr >> 21) & 0x1F;
+	int32_t _offset = (int16_t)(instr & 0xffff);
+	
+	printf("sh %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
+	IRValue base = IRValue(IRValue::Reg);
+	IRValue rt = IRValue(IRValue::Reg);
+	IRValue offset = IRValue(IRValue::Imm);
+
+	base.SetReg(_base);
+	rt.SetReg(_rt);
+	offset.SetImm(_offset);
+
+	i = IRInstruction::Build({rt, offset, base}, IRInstrs::MemoryStore);
+	i.access_size = IRInstruction::U16;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitSW(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int _rt = (instr >> 16) & 0x1F;
+	int _base = (instr >> 21) & 0x1F;
+	int32_t _offset = (int16_t)(instr & 0xffff);
+	
+	printf("sw %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
+	IRValue base = IRValue(IRValue::Reg);
+	IRValue rt = IRValue(IRValue::Reg);
+	IRValue offset = IRValue(IRValue::Imm);
+
+	base.SetReg(_base);
+	rt.SetReg(_rt);
+	offset.SetImm(_offset);
+
+	i = IRInstruction::Build({rt, offset, base}, IRInstrs::MemoryStore);
+	i.access_size = IRInstruction::U32;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitLD(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int _rt = (instr >> 16) & 0x1F;
+	int _base = (instr >> 21) & 0x1F;
+	int32_t _offset = (int16_t)(instr & 0xffff);
+	
+	printf("ld %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
+	IRValue base = IRValue(IRValue::Reg);
+	IRValue rt = IRValue(IRValue::Reg);
+	IRValue offset = IRValue(IRValue::Imm);
+
+	base.SetReg(_base);
+	rt.SetReg(_rt);
+	offset.SetImm(_offset);
+
+	i = IRInstruction::Build({rt, offset, base}, IRInstrs::MemoryLoad);
+	i.access_size = IRInstruction::U64;
+	i.is_unsigned = true;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitSWC1(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int _rt = (instr >> 16) & 0x1F;
+	int _base = (instr >> 21) & 0x1F;
+	int32_t _offset = (int16_t)(instr & 0xffff);
+
+	printf("swc1 %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
+	IRValue base = IRValue(IRValue::Reg);
+	IRValue rt = IRValue(IRValue::Float);
 	IRValue offset = IRValue(IRValue::Imm);
 
 	base.SetReg(_base);
@@ -250,11 +562,57 @@ void JIT::EmitSLL(uint32_t instr, EE_JIT::IRInstruction& i)
 	cur_block->ir.push_back(i);
 }
 
+void JIT::EmitSRL(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int sa = (instr >> 6) & 0x1F;
+
+	printf("srl %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue src = IRValue(IRValue::Reg);
+	IRValue shift = IRValue(IRValue::Imm);
+	
+	dest.SetReg(rd);
+	src.SetReg(rt);
+	shift.SetImm32Unsigned(sa);
+
+	i = IRInstruction::Build({dest, src, shift}, IRInstrs::Shift);
+	i.is_logical = true;
+	i.direction = IRInstruction::Right;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitSRA(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int sa = (instr >> 6) & 0x1F;
+
+	printf("sra %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue src = IRValue(IRValue::Reg);
+	IRValue shift = IRValue(IRValue::Imm);
+	
+	dest.SetReg(rd);
+	src.SetReg(rt);
+	shift.SetImm32Unsigned(sa);
+
+	i = IRInstruction::Build({dest, src, shift}, IRInstrs::Shift);
+	i.is_logical = false;
+	i.direction = IRInstruction::Right;
+
+	cur_block->ir.push_back(i);
+}
+
 void JIT::EmitJR(uint32_t instr, EE_JIT::IRInstruction &i)
 {
-	printf("jr\n");
-
 	int rs = (instr >> 21) & 0x1F;
+
+	printf("jr %s\n", EmotionEngine::Reg(rs));
 
 	IRValue src = IRValue(IRValue::Reg);
 	src.SetReg(rs);
@@ -283,22 +641,244 @@ void JIT::EmitJALR(uint32_t instr, EE_JIT::IRInstruction &i)
 	cur_block->ir.push_back(i);
 }
 
+void JIT::EmitMOVN(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	printf("movn %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue src1 = IRValue(IRValue::Reg);
+	IRValue src2 = IRValue(IRValue::Reg);
+	
+	dest.SetReg(rd);
+	src1.SetReg(rt);
+	src2.SetReg(rs);
+
+	i = IRInstruction::Build({dest, src1, src2}, IRInstrs::MovCond);
+	i.mov_cond = IRInstruction::MovCond::N;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitBreak(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	printf("break\n");
+
+	i = IRInstruction::Build({}, IRInstrs::UhOh);
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitMFHI(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+
+	printf("mfhi %s\n", EmotionEngine::Reg(rd));
+
+	IRValue reg = IRValue(IRValue::Reg);
+	reg.SetReg(rd);
+
+	i = IRInstruction::Build({reg}, IRInstrs::MoveFromHi);
+	cur_block->ir.push_back(i);	
+}
+
+void JIT::EmitMFLO(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+
+	printf("mflo %s\n", EmotionEngine::Reg(rd));
+
+	IRValue reg = IRValue(IRValue::Reg);
+	reg.SetReg(rd);
+
+	i = IRInstruction::Build({reg}, IRInstrs::MoveFromLo);
+	i.is_mmi_divmul = false;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitMULT(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	printf("mult %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue src1 = IRValue(IRValue::Reg);
+	IRValue src2 = IRValue(IRValue::Reg);
+	
+	dest.SetReg(rd);
+	src1.SetReg(rt);
+	src2.SetReg(rs);
+
+	i = IRInstruction::Build({dest, src1, src2}, IRInstrs::Mult);
+	i.is_unsigned = false;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitDIV(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	printf("div %s, %s\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+
+	IRValue src1 = IRValue(IRValue::Reg);
+	IRValue src2 = IRValue(IRValue::Reg);
+	
+	src1.SetReg(rt);
+	src2.SetReg(rs);
+
+	i = IRInstruction::Build({src1, src2}, IRInstrs::Div);
+	i.is_unsigned = false;
+	i.is_mmi_divmul = false;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitDIVU(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	printf("divu %s, %s\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+
+	IRValue src1 = IRValue(IRValue::Reg);
+	IRValue src2 = IRValue(IRValue::Reg);
+	
+	src1.SetReg(rt);
+	src2.SetReg(rs);
+
+	i = IRInstruction::Build({src1, src2}, IRInstrs::Div);
+	i.is_unsigned = true;
+	i.is_mmi_divmul = false;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitADDU(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	printf("addu %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue source2 = IRValue(IRValue::Reg);
+	source.SetReg(rs);
+	dest.SetReg(rd);
+	source2.SetReg(rt);
+
+	i = IRInstruction::Build({dest, source, source2}, IRInstrs::Add);
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitSUBU(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	printf("subu %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue source2 = IRValue(IRValue::Reg);
+	source.SetReg(rt);
+	dest.SetReg(rd);
+	source2.SetReg(rs);
+
+	i = IRInstruction::Build({dest, source, source2}, IRInstrs::Sub);
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitAND(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	printf("and %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue source2 = IRValue(IRValue::Reg);
+	source.SetReg(rs);
+	dest.SetReg(rd);
+	source2.SetReg(rt);
+
+	i = IRInstruction::Build({dest, source, source2}, IRInstrs::AND);
+
+	cur_block->ir.push_back(i);
+}
+
 void JIT::EmitOR(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	int rd = (instr >> 11) & 0x1F;
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	printf("or %s, %s, %s\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::Reg(rd));
+	printf("or %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
 	IRValue source2 = IRValue(IRValue::Reg);
 	source.SetReg(rs);
-	dest.SetReg(rt);
-	source2.SetReg(rd);
+	dest.SetReg(rd);
+	source2.SetReg(rt);
 
 	i = IRInstruction::Build({dest, source, source2}, IRInstrs::OR);
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitSLT(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	printf("slt %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue source2 = IRValue(IRValue::Reg);
+	source.SetReg(rs);
+	dest.SetReg(rd);
+	source2.SetReg(rt);
+
+	i = IRInstruction::Build({dest, source, source2}, IRInstrs::SLTI);
+	i.is_unsigned = false;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitSLTU(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	printf("sltu %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue source2 = IRValue(IRValue::Reg);
+	source.SetReg(rs);
+	dest.SetReg(rd);
+	source2.SetReg(rt);
+
+	i = IRInstruction::Build({dest, source, source2}, IRInstrs::SLTI);
+	i.is_unsigned = true;
 
 	cur_block->ir.push_back(i);
 }
@@ -321,6 +901,81 @@ void JIT::EmitDADDU(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	i = IRInstruction::Build({dest, src1, src2}, IRInstrs::Add);
 	i.size = IRInstruction::Size64;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitBLTZ(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rs = (instr >> 21) & 0x1F;
+
+	int32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
+	
+	printf("bltz %s, 0x%08x (%x)\n", EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue imm = IRValue(IRValue::Imm);
+
+	dest.SetReg(rs);
+	imm.SetImm32((int32_t)(int16_t)(instr & 0xffff) << 2);
+
+	i = IRInstruction::Build({dest, imm}, IRInstrs::BranchRegImm);
+	i.b_type = IRInstruction::BranchType::LT;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitBGEZ(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rs = (instr >> 21) & 0x1F;
+
+	int32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
+	
+	printf("bgez %s, 0x%08x (%x)\n", EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue imm = IRValue(IRValue::Imm);
+
+	dest.SetReg(rs);
+	imm.SetImm32((int32_t)(int16_t)(instr & 0xffff) << 2);
+
+	i = IRInstruction::Build({dest, imm}, IRInstrs::BranchRegImm);
+	i.b_type = IRInstruction::BranchType::GE;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitMFLO1(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+
+	printf("mflo1 %s\n", EmotionEngine::Reg(rd));
+
+	IRValue reg = IRValue(IRValue::Reg);
+	reg.SetReg(rd);
+
+	i = IRInstruction::Build({reg}, IRInstrs::MoveFromLo);
+	i.is_mmi_divmul = true;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitDIVU1(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	printf("divu1 %s, %s\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+
+	IRValue src1 = IRValue(IRValue::Reg);
+	IRValue src2 = IRValue(IRValue::Reg);
+	
+	src1.SetReg(rt);
+	src2.SetReg(rs);
+
+	i = IRInstruction::Build({src1, src2}, IRInstrs::Div);
+	i.is_unsigned = true;
+	i.is_mmi_divmul = true;
 
 	cur_block->ir.push_back(i);
 }
@@ -394,17 +1049,59 @@ void JIT::EmitIR(uint32_t instr)
 		case 0x00:
 			EmitSLL(instr, current_instruction);
 			break;	
+		case 0x02:
+			EmitSRL(instr, current_instruction);
+			break;	
+		case 0x03:
+			EmitSRA(instr, current_instruction);
+			break;	
 		case 0x08:
 			EmitJR(instr, current_instruction);
 			break;
 		case 0x09:
 			EmitJALR(instr, current_instruction);
 			break;
+		case 0x0B:
+			EmitMOVN(instr, current_instruction);
+			break;
+		case 0x0D:
+			EmitBreak(instr, current_instruction);
+			break;
 		case 0x0F:
 			printf("sync\n");
 			break;
+		case 0x10:
+			EmitMFHI(instr, current_instruction);
+			break;
+		case 0x12:
+			EmitMFLO(instr, current_instruction);
+			break;
+		case 0x18:
+			EmitMULT(instr, current_instruction);
+			break;
+		case 0x1A:
+			EmitDIV(instr, current_instruction);
+			break;
+		case 0x1B:
+			EmitDIVU(instr, current_instruction);
+			break;
+		case 0x21:
+			EmitADDU(instr, current_instruction);
+			break;
+		case 0x23:
+			EmitSUBU(instr, current_instruction);
+			break;
+		case 0x24:
+			EmitAND(instr, current_instruction);
+			break;
 		case 0x25:
 			EmitOR(instr, current_instruction);
+			break;
+		case 0x2A:
+			EmitSLT(instr, current_instruction);
+			break;
+		case 0x2B:
+			EmitSLTU(instr, current_instruction);
 			break;
 		case 0x2D:
 			EmitDADDU(instr, current_instruction);
@@ -417,6 +1114,26 @@ void JIT::EmitIR(uint32_t instr)
 		}
 		break;
 	}
+	case 0x01:
+	{
+		opcode = (instr >> 16) & 0x1F;
+		switch (opcode)
+		{
+		case 0x00:
+			EmitBLTZ(instr, current_instruction);
+			break;
+		case 0x01:
+			EmitBGEZ(instr, current_instruction);
+			break;
+		default:
+			printf("Unknown regimm opcode 0x%02x\n", opcode);
+			exit(1);
+		}
+		break;
+	}
+	case 0x02:
+		EmitJ(instr, current_instruction);
+		break;
 	case 0x03:
 		EmitJAL(instr, current_instruction);
 		break;
@@ -426,11 +1143,20 @@ void JIT::EmitIR(uint32_t instr)
 	case 0x05:
 		EmitBNE(instr, current_instruction);
 		break;
+	case 0x06:
+		EmitBLEZ(instr, current_instruction);
+		break;
+	case 0x07:
+		EmitBGTZ(instr, current_instruction);
+		break;
 	case 0x09:
 		EmitADDIU(instr, current_instruction);
 		break;
 	case 0x0A:
 		EmitSLTI(instr, current_instruction);
+		break;
+	case 0x0B:
+		EmitSLTIU(instr, current_instruction);
 		break;
 	case 0x0C:
 		EmitANDI(instr, current_instruction);
@@ -444,8 +1170,56 @@ void JIT::EmitIR(uint32_t instr)
 	case 0x10:
 		EmitCOP0(instr, current_instruction);
 		break;
+	case 0x14:
+		EmitBEQL(instr, current_instruction);
+		break;
+	case 0x15:
+		EmitBNEL(instr, current_instruction);
+		break;
+	case 0x1C:
+	{
+		opcode = instr & 0x3F;
+		switch (opcode)
+		{
+		case 0x12:
+			EmitMFLO1(instr, current_instruction);
+			break;
+		case 0x1B:
+			EmitDIVU1(instr, current_instruction);
+			break;
+		default:
+			printf("[emu/CPU]: Cannot emit unknown mmi instruction 0x%02x\n", opcode);
+			delete cur_block;
+			exit(1);
+		}
+		break;
+	}
+	case 0x20:
+		EmitLB(instr, current_instruction);
+		break;
+	case 0x23:
+		EmitLW(instr, current_instruction);
+		break;
+	case 0x24:
+		EmitLBU(instr, current_instruction);
+		break;
+	case 0x25:
+		EmitLHU(instr, current_instruction);
+		break;
+	case 0x28:
+		EmitSB(instr, current_instruction);
+		break;
+	case 0x29:
+		EmitSH(instr, current_instruction);
+		break;
 	case 0x2b:
 		EmitSW(instr, current_instruction);
+		break;
+	case 0x37:
+		EmitLD(instr, current_instruction);
+		break;
+	case 0x39:
+		EmitSWC1(instr, current_instruction);
 		break;
 	case 0x3f:
 		EmitSD(instr, current_instruction);
@@ -468,14 +1242,39 @@ void JIT::EmitPrequel(uint32_t guest_start)
 	cur_block->ir.push_back(i);
 }
 
-JIT::EntryFunc JIT::EmitDone()
+JIT::EntryFunc JIT::EmitDone(size_t cycles_taken)
 {
 	auto i = IRInstruction::Build({}, IRInstrs::RestoreHostRegs);
 	cur_block->ir.push_back(i);
 
 	blockCache.push_back(cur_block);
 	EE_JIT::emit->TranslateBlock(cur_block);
+
+	cur_block->cycles = cycles_taken;
+
 	return (EntryFunc)cur_block->entry;
+}
+
+Block* JIT::GetExistingBlock(uint32_t start)
+{
+	for (auto b : blockCache)
+	{
+		if (b->guest_start == start)
+			return b;
+	}
+
+	return nullptr;
+}
+
+bool JIT::DoesBlockExist(uint32_t addr)
+{
+	for (auto b : blockCache)
+	{
+		if (b->guest_start == addr)
+			return true;
+	}
+
+	return false;
 }
 
 }
@@ -484,7 +1283,6 @@ EE_JIT::JIT jit;
 
 namespace EmotionEngine
 {
-ProcessorState state;
 
 void Reset()
 {
@@ -508,7 +1306,7 @@ bool IsBranch(uint32_t instr)
 		opcode = instr & 0x3F;
 		switch (opcode)
 		{			
-		case 0x08:	
+		case 0x08:
 		case 0x09:
 			return true;
 		default:
@@ -516,46 +1314,84 @@ bool IsBranch(uint32_t instr)
 		}
 		break;
 	}
+	case 0x01:
 	case 0x02:
 	case 0x03:
 	case 0x04:
 	case 0x05:
+	case 0x06:
+	case 0x07:
+	case 0x14:
+	case 0x15:
 		return true;
 	default:
 		return false;
 	}
 }
 
+#define BLOCKCACHE_ENABLE
+
 int Clock()
 {
-	jit.EmitPrequel(state.pc);
-
-	bool isBranch = false;
-	bool isBranchDelayed = false;
-
-	uint32_t pc = state.pc;
-	uint32_t next_pc = state.next_pc;
-
-	int cycles = 0;
-
-	do
+#ifdef BLOCKCACHE_ENABLE
+	if (!jit.DoesBlockExist(state.pc))
 	{
-		uint32_t instr = Bus::Read32(pc);
-		pc = next_pc;
-		next_pc += 4;
+#endif
+		jit.EmitPrequel(state.pc);
 
-		jit.EmitIR(instr);
+		bool isBranch = false;
+		bool isBranchDelayed = false;
 
-		isBranch = isBranchDelayed;
-		isBranchDelayed = IsBranch(instr);
+		uint32_t pc = state.pc;
+		uint32_t next_pc = state.next_pc;
 
-		cycles += 2;
-	} while (!isBranch);
+		int cycles = 0;
+		int instrs_emitted = 0;
 
-	auto func = jit.EmitDone();
-	func();
+		do
+		{
+			instrs_emitted++;
+			uint32_t instr = Bus::Read32(pc);
+			pc = next_pc;
+			next_pc += 4;
 
-	return cycles;
+			state.pc_at = pc - 4;
+
+			printf("0x%08x (0x%08x): ", pc - 4, instr);
+
+			jit.EmitIR(instr);
+
+			isBranch = isBranchDelayed;
+			isBranchDelayed = IsBranch(instr);
+
+			if (instrs_emitted == 20 && !isBranchDelayed)
+				break;
+
+			cycles += 2;
+		} while (!isBranch);
+
+		auto func = jit.EmitDone(cycles);
+		func();
+
+		return cycles;
+#ifdef BLOCKCACHE_ENABLE
+	}
+	else
+	{
+		auto b = jit.GetExistingBlock(state.pc);
+
+		if (!b)
+		{
+		 	printf("Something has gone seriously wrong!\n");
+		 	exit(1);
+		}
+
+		auto func = (EE_JIT::JIT::EntryFunc)b->entry;
+		func();
+
+		return b->cycles;
+	}
+#endif
 }
 
 void Dump()
@@ -565,6 +1401,10 @@ void Dump()
 	for (int i = 0; i < 32; i++)
 		printf("%s\t->\t0x%lx%016lx\n", Reg(i), state.regs[i].u64[1], state.regs[i].u64[0]);
 	printf("pc\t->\t0x%08x\n", state.pc);
+	printf("hi\t->\t0x%08x\n", state.hi);
+	printf("lo\t->\t0x%08x\n", state.lo);
+	printf("hi1\t->\t0x%08x\n", state.hi1);
+	printf("lo1\t->\t0x%08x\n", state.lo1);
 }
 
 ProcessorState* GetState()

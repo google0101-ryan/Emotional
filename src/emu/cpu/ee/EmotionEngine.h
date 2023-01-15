@@ -23,9 +23,19 @@ enum IRInstrs
 	JumpAlways = 8,
 	Add = 9,
 	MemoryStore = 10,
-	JumpImm = 11, // We have to do some fancy or'ing for JAL, J
+	JumpImm = 11, // We have to do some fancy or'ing for JAL, J so it can't share an op with JR, JALR
 	AND = 12,
 	Shift = 13,
+	Mult = 14,
+	Div = 15,
+	UhOh = 16,
+	MemoryLoad = 17,
+	MoveFromLo = 18,
+	BranchRegImm = 19,
+	MoveFromHi = 20,
+	Sub = 21,
+	MovCond = 22,
+	Div1 = 23,
 };
 
 struct IRValue
@@ -36,7 +46,7 @@ public:
 		Imm,
 		Reg,
 		Cop0Reg,
-		FP
+		Float
 	};
 private:
 	union
@@ -55,10 +65,11 @@ public:
 	bool IsImm() {return type == Imm;}
 	bool IsCop0() {return type == Cop0Reg;}
 	bool IsReg() {return type == Reg;}
+	bool IsFloat() {return type == Float;}
 	// Can be used for guest and COP0 registers
 	void SetReg(uint32_t reg) {value.register_num = reg;}
 	void SetImm(uint16_t imm) {value.imm = (int32_t)(int16_t)imm;}
-	void SetImm32(uint32_t imm) {value.imm = (int64_t)(int32_t)imm;}
+	void SetImm32(uint32_t imm) {value.imm = imm;}
 	void SetImmUnsigned(uint16_t imm) {value.imm = (uint32_t)imm;}
 	void SetImm32Unsigned(uint32_t imm) {value.imm = imm;}
 	
@@ -75,6 +86,9 @@ struct IRInstruction
 
 	bool should_link = false;
 	bool is_logical = false;
+	bool is_unsigned = false;
+	bool is_likely = false;
+	bool is_mmi_divmul = false;
 
 	enum Direction
 	{
@@ -86,14 +100,25 @@ struct IRInstruction
 	{
 		NE = 0,
 		EQ = 1,
+		GE = 2,
+		LE = 3,
+		GT = 4,
+		LT = 5,
 	} b_type;
+
+	enum class MovCond : int
+	{
+		N = 1,
+		Z = 2,
+	} mov_cond;
 
 	enum AccessSize
 	{
 		U64 = 0,
 		U32 = 1,
 		U16 = 2,
-		U8 = 3
+		U8 = 3,
+		S8 = 4,
 	} access_size;
 
 	enum InstrSize // ADDIU vs DADDIU, etc
@@ -122,6 +147,7 @@ struct Block
 	uint32_t guest_start;
 	uint8_t* entry;
 	std::vector<IRInstruction> ir;
+	size_t cycles;
 };
 
 class JIT
@@ -130,23 +156,57 @@ private:
 	Block* cur_block;
 	std::vector<Block*> blockCache;
 
-	void EmitJAL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
+	void EmitJ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
+	void EmitJAL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x03
 	void EmitBEQ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x04
 	void EmitBNE(uint32_t instr, EE_JIT::IRInstruction& i);  // 0x05
+	void EmitBLEZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x06
+	void EmitBGTZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x06
 	void EmitADDIU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x09
 	void EmitSLTI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0A
+	void EmitSLTIU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0B
 	void EmitANDI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0C
 	void EmitORI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0D
 	void EmitLUI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0F
 	void EmitCOP0(uint32_t instr, EE_JIT::IRInstruction& i); // 0x10
+	void EmitBEQL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x14
+	void EmitBNEL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x15
+	void EmitLB(uint32_t instr, EE_JIT::IRInstruction& i); // 0x20
+	void EmitLW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x23
+	void EmitLBU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x24
+	void EmitLHU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x25
+	void EmitSB(uint32_t instr, EE_JIT::IRInstruction& i); // 0x28
+	void EmitSH(uint32_t instr, EE_JIT::IRInstruction& i); // 0x29
 	void EmitSW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2B
+	void EmitLD(uint32_t instr, EE_JIT::IRInstruction& i); // 0x37
+	void EmitSWC1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x39
 	void EmitSD(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3f
 
 	void EmitSLL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
+	void EmitSRL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
+	void EmitSRA(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
 	void EmitJR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x08
 	void EmitJALR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x09
+	void EmitMOVN(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0B
+	void EmitBreak(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0D
+	void EmitMFHI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x10
+	void EmitMFLO(uint32_t instr, EE_JIT::IRInstruction& i); // 0x12
+	void EmitMULT(uint32_t instr, EE_JIT::IRInstruction& i); // 0x18
+	void EmitDIV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1a
+	void EmitDIVU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1b
+	void EmitADDU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x21
+	void EmitSUBU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x23
+	void EmitAND(uint32_t instr, EE_JIT::IRInstruction& i); // 0x24
 	void EmitOR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x25
+	void EmitSLT(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2A
+	void EmitSLTU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2B
 	void EmitDADDU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2D
+	
+	void EmitBLTZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
+	void EmitBGEZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x01
+	
+	void EmitMFLO1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x12
+	void EmitDIVU1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1B
 
 	void EmitMFC0(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
 	void EmitMTC0(uint32_t instr, EE_JIT::IRInstruction& i); // 0x04
@@ -157,7 +217,10 @@ public:
 	void EmitIR(uint32_t instr);
 
 	void EmitPrequel(uint32_t guest_start);
-	EntryFunc EmitDone();
+	EntryFunc EmitDone(size_t cycles_taken);
+	Block* GetExistingBlock(uint32_t start);
+
+	bool DoesBlockExist(uint32_t addr);
 };
 
 }
@@ -172,6 +235,14 @@ struct ProcessorState
 	uint32_t pc, next_pc;
 	uint32_t hi1, hi;
 	uint32_t lo1, lo;
+	union FPR
+	{
+		uint32_t i;
+		int32_t s;
+		float f;
+	} fprs[32];
+
+	uint32_t pc_at;
 };
 
 void Reset();

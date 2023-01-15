@@ -42,9 +42,6 @@ void CheckScheduler(int cycles)
 		std::pop_heap(event_queue.begin(), event_queue.end());
 		event_queue.pop_back();
 	}
-
-	if (event_queue.size() > 1)
-		printf("Next event is %lu cycles from now\n", event_queue.front().cycles_from_now - global_cycles);
 }
 
 }

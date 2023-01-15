@@ -61,4 +61,5 @@ void System::Run()
 void System::Dump()
 {
 	EmotionEngine::Dump();
+	Bus::Dump();
 }
