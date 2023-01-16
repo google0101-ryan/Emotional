@@ -11,6 +11,7 @@ set(SOURCES src/main.cpp
 			src/emu/cpu/ee/EmotionEngine.cpp
 			src/emu/cpu/ee/dmac.cpp
 			src/emu/cpu/ee/vu.cpp
+			src/emu/cpu/ee/vif.cpp
 			src/emu/cpu/ee/x64/reg_alloc.cpp
 			src/emu/cpu/ee/x64/emit.cpp
 			src/emu/sched/scheduler.cpp
@@ -27,7 +28,7 @@ set(TARGET_NAME ps2)
 if(MSVC)
   target_compile_options(${TARGET_NAME} PRIVATE /W4 /WX)
 else()
-  target_compile_options(${TARGET_NAME} PRIVATE -pg)
+  target_compile_options(${TARGET_NAME} PRIVATE -pg -O0 -mincoming-stack-boundary=3)
   target_link_options(${TARGET_NAME} PRIVATE -pg)
 endif()
 

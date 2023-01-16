@@ -282,7 +282,7 @@ void JIT::EmitCOP0(uint32_t instr, EE_JIT::IRInstruction &i)
 		// printf("tlbwi\n");
 		break;
 	default:
-		printf("[emu/CPU]: Cannot emit unknown cop0 instruction 0x%02x\n", op);
+		// printf("[emu/CPU]: Cannot emit unknown cop0 instruction 0x%02x\n", op);
 		exit(1);
 	}
 }
@@ -350,6 +350,48 @@ void JIT::EmitDADDIU(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	i = IRInstruction::Build({dest, source, imm}, IRInstrs::Add);
 	i.size = IRInstruction::Size64;
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitLDL(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int _rt = (instr >> 16) & 0x1F;
+	int _base = (instr >> 21) & 0x1F;
+	int32_t _offset = (int16_t)(instr & 0xffff);
+
+	// printf("ldl %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
+	IRValue base = IRValue(IRValue::Reg);
+	IRValue rt = IRValue(IRValue::Reg);
+	IRValue offset = IRValue(IRValue::Imm);
+
+	base.SetReg(_base);
+	rt.SetReg(_rt);
+	offset.SetImm(_offset);
+
+	i = IRInstruction::Build({rt, offset, base}, IRInstrs::LDL);
+	
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitLDR(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int _rt = (instr >> 16) & 0x1F;
+	int _base = (instr >> 21) & 0x1F;
+	int32_t _offset = (int16_t)(instr & 0xffff);
+
+	// printf("ldr %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
+	IRValue base = IRValue(IRValue::Reg);
+	IRValue rt = IRValue(IRValue::Reg);
+	IRValue offset = IRValue(IRValue::Imm);
+
+	base.SetReg(_base);
+	rt.SetReg(_rt);
+	offset.SetImm(_offset);
+
+	i = IRInstruction::Build({rt, offset, base}, IRInstrs::LDR);
+	
 	cur_block->ir.push_back(i);
 }
 
@@ -513,6 +555,29 @@ void JIT::EmitLHU(uint32_t instr, EE_JIT::IRInstruction &i)
 	cur_block->ir.push_back(i);
 }
 
+void JIT::EmitLWU(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int _rt = (instr >> 16) & 0x1F;
+	int _base = (instr >> 21) & 0x1F;
+	int32_t _offset = (int16_t)(instr & 0xffff);
+
+	// printf("lwu %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
+	IRValue base = IRValue(IRValue::Reg);
+	IRValue rt = IRValue(IRValue::Reg);
+	IRValue offset = IRValue(IRValue::Imm);
+
+	base.SetReg(_base);
+	rt.SetReg(_rt);
+	offset.SetImm(_offset);
+
+	i = IRInstruction::Build({rt, offset, base}, IRInstrs::MemoryLoad);
+	i.access_size = IRInstruction::U32;
+	i.is_unsigned = true;
+
+	cur_block->ir.push_back(i);
+}
+
 void JIT::EmitSB(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	int _rt = (instr >> 16) & 0x1F;
@@ -575,7 +640,50 @@ void JIT::EmitSW(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	i = IRInstruction::Build({rt, offset, base}, IRInstrs::MemoryStore);
 	i.access_size = IRInstruction::U32;
+	i.is_unsigned = false;
 
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitSDL(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int _rt = (instr >> 16) & 0x1F;
+	int _base = (instr >> 21) & 0x1F;
+	int32_t _offset = (int16_t)(instr & 0xffff);
+	
+	// printf("sdl %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
+	IRValue base = IRValue(IRValue::Reg);
+	IRValue rt = IRValue(IRValue::Reg);
+	IRValue offset = IRValue(IRValue::Imm);
+
+	base.SetReg(_base);
+	rt.SetReg(_rt);
+	offset.SetImm(_offset);
+
+	i = IRInstruction::Build({rt, offset, base}, IRInstrs::SDL);
+	
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitSDR(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int _rt = (instr >> 16) & 0x1F;
+	int _base = (instr >> 21) & 0x1F;
+	int32_t _offset = (int16_t)(instr & 0xffff);
+	
+	// printf("sdr %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
+	IRValue base = IRValue(IRValue::Reg);
+	IRValue rt = IRValue(IRValue::Reg);
+	IRValue offset = IRValue(IRValue::Imm);
+
+	base.SetReg(_base);
+	rt.SetReg(_rt);
+	offset.SetImm(_offset);
+
+	i = IRInstruction::Build({rt, offset, base}, IRInstrs::SDR);
+	
 	cur_block->ir.push_back(i);
 }
 
@@ -1487,7 +1595,7 @@ void JIT::EmitIR(uint32_t instr)
 			EmitDSRA32(instr, current_instruction);
 			break;
 		default:
-			printf("[emu/CPU]: Cannot emit unknown special instruction 0x%02x\n", opcode);
+			// printf("[emu/CPU]: Cannot emit unknown special instruction 0x%02x\n", opcode);
 			cur_block->ir.clear();
 			delete cur_block;
 			exit(1);
@@ -1506,7 +1614,7 @@ void JIT::EmitIR(uint32_t instr)
 			EmitBGEZ(instr, current_instruction);
 			break;
 		default:
-			printf("Unknown regimm opcode 0x%02x\n", opcode);
+			// printf("Unknown regimm opcode 0x%02x\n", opcode);
 			exit(1);
 		}
 		break;
@@ -1553,6 +1661,17 @@ void JIT::EmitIR(uint32_t instr)
 	case 0x10:
 		EmitCOP0(instr, current_instruction);
 		break;
+	case 0x11:
+	{
+		opcode = (instr >> 21) & 0x1F;
+		switch (opcode)
+		{
+		default:
+			printf("[emu/EE]: Ignoring COP1 command 0x%08x\n", instr);
+			break;
+		}
+		break;
+	}
 	case 0x12:
 	{
 		opcode = (instr >> 21) & 0x1F;
@@ -1599,6 +1718,12 @@ void JIT::EmitIR(uint32_t instr)
 		break;
 	case 0x19:
 		EmitDADDIU(instr, current_instruction);
+		break;
+	case 0x1A:
+		EmitLDL(instr, current_instruction);
+		break;
+	case 0x1B:
+		EmitLDR(instr, current_instruction);
 		break;
 	case 0x1C:
 	{
@@ -1658,6 +1783,9 @@ void JIT::EmitIR(uint32_t instr)
 	case 0x25:
 		EmitLHU(instr, current_instruction);
 		break;
+	case 0x27:
+		EmitLWU(instr, current_instruction);
+		break;
 	case 0x28:
 		EmitSB(instr, current_instruction);
 		break;
@@ -1666,6 +1794,12 @@ void JIT::EmitIR(uint32_t instr)
 		break;
 	case 0x2b:
 		EmitSW(instr, current_instruction);
+		break;
+	case 0x2c:
+		EmitSDL(instr, current_instruction);
+		break;
+	case 0x2d:
+		EmitSDR(instr, current_instruction);
 		break;
 	case 0x2f:
 		// printf("cache\n");
@@ -1692,20 +1826,16 @@ void JIT::EmitPrequel(uint32_t guest_start)
 	cur_block = new Block;
 	cur_block->guest_addr = guest_start;
 	cur_block->entry = (uint8_t*)emit->GetFreeBase();
-
-	auto i = IRInstruction::Build({}, IRInstrs::SaveHostRegs);
-	cur_block->ir.push_back(i);
 }
 
 JIT::EntryFunc JIT::EmitDone(size_t cycles_taken)
 {
+	// printf("Done.\n");
+
 	IRValue cycles = IRValue(IRValue::Imm);
 	cycles.SetImm32Unsigned(cycles_taken);
 
 	auto i = IRInstruction::Build({cycles}, IRInstrs::UpdateCopCount);
-	cur_block->ir.push_back(i);
-
-	i = IRInstruction::Build({}, IRInstrs::RestoreHostRegs);
 	cur_block->ir.push_back(i);
 
 	blockCache[cur_block->guest_addr] = cur_block;
@@ -1718,6 +1848,12 @@ JIT::EntryFunc JIT::EmitDone(size_t cycles_taken)
 
 Block* JIT::GetExistingBlock(uint32_t start)
 {
+	if (!blockCache[start])
+	{
+		// printf("ERROR: Block doesn't exist at 0x%08x\n", start);
+		exit(1);
+	}
+
 	return blockCache[start];
 }
 
@@ -1741,7 +1877,7 @@ void JIT::MarkDirty(uint32_t address, uint32_t size)
 {
 	for (auto i = address; i < address+size; i++)
 	{
-		if (blockCache[i])
+		if (blockCache.find(size) != blockCache.end())
 		{
 			delete blockCache[i];
 			blockCache[i] = nullptr;
@@ -1799,73 +1935,92 @@ bool IsBranch(uint32_t instr)
 	default:
 		return false;
 	}
+
+	return false;
+}
+
+EE_JIT::JIT::EntryFunc EmitDone(int cycles_taken)
+{
+	return jit.EmitDone(cycles_taken);
+}
+
+EE_JIT::JIT::EntryFunc GetExistingBlockFunc(uint32_t addr)
+{
+	return (EE_JIT::JIT::EntryFunc)jit.GetExistingBlock(addr)->entry;
+}
+
+uint64_t GetExistingBlockCycles(uint32_t addr)
+{
+	return jit.GetExistingBlock(addr)->cycles;
 }
 
 #define BLOCKCACHE_ENABLE
 
 int Clock()
 {
-	jit.CheckCacheFull();
+// 	jit.CheckCacheFull();
 
-#ifdef BLOCKCACHE_ENABLE
-	if (!jit.DoesBlockExist(state.pc))
-	{
-#endif
-		jit.EmitPrequel(state.pc);
+// #ifdef BLOCKCACHE_ENABLE
+// 	if (!jit.DoesBlockExist(state.pc))
+// 	{
+// #endif
+// 		jit.EmitPrequel(state.pc);
 
-		bool isBranch = false;
-		bool isBranchDelayed = false;
+// 		bool isBranch = false;
+// 		bool isBranchDelayed = false;
 
-		uint32_t pc = state.pc;
-		uint32_t next_pc = state.next_pc;
+// 		uint32_t pc = state.pc;
+// 		uint32_t next_pc = state.next_pc;
 
-		int cycles = 0;
-		int instrs_emitted = 0;
+// 		int cycles = 0;
+// 		int instrs_emitted = 0;
 
-		do
-		{
-			instrs_emitted++;
-			uint32_t instr = Bus::Read32(pc);
-			pc = next_pc;
-			next_pc += 4;
+// 		do
+// 		{
+// 			instrs_emitted++;
+// 			uint32_t instr = Bus::Read32(pc);
+// 			pc = next_pc;
+// 			next_pc += 4;
 
-			state.pc_at = pc - 4;
+// 			state.pc_at = pc - 4;
 
-			// printf("0x%08x (0x%08x): ", pc - 4, instr);
+// 			// printf("0x%08x (0x%08x): ", pc - 4, instr);
 
-			jit.EmitIR(instr);
+// 			jit.EmitIR(instr);
 
-			isBranch = isBranchDelayed;
-			isBranchDelayed = IsBranch(instr);
+// 			isBranch = isBranchDelayed;
+// 			isBranchDelayed = IsBranch(instr);
 
-			if (instrs_emitted == 20 && !isBranchDelayed)
-				break;
+// 			if (instrs_emitted == 20 && !isBranchDelayed)
+// 				break;
 
-			cycles += 2;
-		} while (!isBranch);
+// 			cycles += 1;
+// 		} while (!isBranch);
 
-		auto func = jit.EmitDone(cycles);
-		func();
+// 		auto func = jit.EmitDone(cycles);
+// 		func();
 
-		return cycles;
-#ifdef BLOCKCACHE_ENABLE
-	}
-	else
-	{
-		auto b = jit.GetExistingBlock(state.pc);
+// 		return cycles;
+// #ifdef BLOCKCACHE_ENABLE
+// 	}
+// 	else
+// 	{
+// 		auto b = jit.GetExistingBlock(state.pc);
 
-		if (!b)
-		{
-		 	printf("Something has gone seriously wrong!\n");
-		 	exit(1);
-		}
+// 		if (!b)
+// 		{
+// 		 	// printf("Something has gone seriously wrong!\n");
+// 		 	exit(1);
+// 		}
 
-		auto func = (EE_JIT::JIT::EntryFunc)b->entry;
-		func();
+// 		auto func = (EE_JIT::JIT::EntryFunc)b->entry;
+// 		func();
 
-		return b->cycles;
-	}
-#endif
+// 		return b->cycles;
+// 	}
+// #endif
+
+	EE_JIT::emit->EnterDispatcher();
 }
 
 void Dump()
@@ -1890,4 +2045,21 @@ void MarkDirty(uint32_t address, uint32_t size)
 	jit.MarkDirty(address, size);
 }
 
+void EmitPrequel()
+{
+	jit.EmitPrequel(state.pc);
+}
+
+void CheckCacheFull()
+{
+	jit.CheckCacheFull();
+}
+bool DoesBlockExit(uint32_t addr)
+{
+	return jit.DoesBlockExist(addr);
+}
+void EmitIR(uint32_t instr)
+{
+	jit.EmitIR(instr);
+}
 }

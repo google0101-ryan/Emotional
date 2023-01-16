@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <emu/cpu/ee/x64/reg_alloc.h>
 #include <3rdparty/xbyak/xbyak.h>
+#include <emu/cpu/ee/EmotionEngine.h>
 #include <vector>
 
 namespace EE_JIT
@@ -51,10 +52,14 @@ private:
 	void EmitBranchRegImm(IRInstruction i);
 	void EmitUpdateCopCount(IRInstruction i);
 	void EmitPOR(IRInstruction i);
+
+	EE_JIT::JIT::EntryFunc dispatcher_entry;
 public:
 	Emitter();
 	void Dump();
 	void TranslateBlock(Block* block);
+
+	void EnterDispatcher();
 
 	void ResetFreeBase()
 	{

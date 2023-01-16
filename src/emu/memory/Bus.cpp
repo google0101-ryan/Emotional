@@ -11,6 +11,7 @@
 #include <emu/gpu/gs.h>
 #include <emu/cpu/ee/dmac.hpp>
 #include <emu/cpu/ee/vu.h>
+#include <emu/cpu/ee/vif.h>
 
 uint8_t BiosRom[0x400000];
 uint8_t spr[0x4000];
@@ -157,6 +158,8 @@ uint32_t Bus::Read32(uint32_t addr)
 		return DMAC::ReadDSTAT();
 	case 0x1000E020:
 		return DMAC::ReadDPCR();
+	case 0x10002010:
+		return 0;
 	}
 	
 	printf("Read32 from unknown address 0x%08x\n", addr);
@@ -171,6 +174,14 @@ uint16_t Bus::Read16(uint32_t addr)
 		return *(uint16_t*)&BiosRom[addr - 0x1fc00000];
 	if (addr >= 0x70000000 && addr < 0x70004000)
 		return *(uint16_t*)&spr[addr - 0x70000000];
+	if (addr < 0x2000000)
+		return *(uint16_t*)&ram[addr];
+	
+	switch (addr)
+	{
+	case 0x1f803800:
+		return 0;
+	}
 
 	printf("Read16 from unknown address 0x%08x\n", addr);
 	exit(1);
@@ -209,7 +220,22 @@ void Bus::Write128(uint32_t addr, uint128_t data)
 		*(__uint128_t*)&ram[addr] = data.u128;
 		return;
 	}
+	if (addr >= 0x70000000 && addr < 0x70004000)
+	{
+		*(__uint128_t*)&spr[addr - 0x70000000] = data.u128;
+		return;
+	}
 
+	if (addr >= 0x11000000 && addr < 0x11004000)
+	{
+		VectorUnit::WriteDataMem128(0, addr, data);
+		return;
+	}
+	if (addr >= 0x11004000 && addr < 0x11008000)
+	{
+		VectorUnit::WriteDataMem128(0, addr, data);
+		return;
+	}
 	if (addr >= 0x1100C000 && addr < 0x11010000)
 	{
 		VectorUnit::WriteDataMem128(1, addr, data);
@@ -218,8 +244,16 @@ void Bus::Write128(uint32_t addr, uint128_t data)
 
 	switch (addr)
 	{
+	case 0x10004000:
+		VIF::WriteVIF0FIFO(data);
+		return;
+	case 0x10005000:
+		VIF::WriteVIF1FIFO(data);
+		return;
 	case 0x10006000:
 		GIF::WriteFIFO(data);
+		return;
+	case 0x10007010:
 		return;
 	}
 
@@ -241,6 +275,11 @@ void Bus::Write64(uint32_t addr, uint64_t data)
 	if (addr < 0x2000000)
 	{
 		*(uint64_t*)&ram[addr] = data;
+		return;
+	}
+	if (addr >= 0x11008000 && addr < 0x1100C000)
+	{
+		VectorUnit::WriteCodeMem64(1, addr, data);
 		return;
 	}
 
@@ -348,6 +387,7 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 	case 0x10001810:
 	case 0x10001820:
 	case 0x10001830:
+	case 0x1000f510:
 		return;
 	case 0x10008000:
 	case 0x10008010:
@@ -427,6 +467,21 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 	case 0x1000E040:
 	case 0x1000E050:
 		return;
+	case 0x10003810:
+		VIF::WriteFBRST(0, data);
+		return;
+	case 0x10003820:
+	case 0x10003830:
+		VIF::WriteMASK(0, data);
+		return;
+	case 0x10003c00:
+		return;
+	case 0x10003c10:
+		VIF::WriteFBRST(1, data);
+		return;
+	case 0x10002000:
+	case 0x10002010:
+		return;
 	}
 
 	printf("Write32 0x%08x to unknown address 0x%08x\n", data, addr);
@@ -442,6 +497,11 @@ void Bus::Write16(uint32_t addr, uint16_t data)
 	if (addr >= 0x70000000 && addr < 0x70004000)
 	{
 		*(uint16_t*)&spr[addr - 0x70000000] = data;
+		return;
+	}
+	if (addr < 0x2000000)
+	{
+		*(uint16_t*)&ram[addr] = data;
 		return;
 	}
 

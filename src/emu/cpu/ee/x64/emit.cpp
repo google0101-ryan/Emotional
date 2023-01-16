@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 #include <emu/cpu/ee/EmotionEngine.h>
 #include <emu/memory/Bus.h>
+#include <emu/sched/scheduler.h>
 #include <fstream>
 #include <cassert>
 
@@ -202,7 +203,7 @@ void EE_JIT::Emitter::EmitBC(IRInstruction i)
 		// cg->add(cg->dword[next_pc], 4);
 		reg_alloc->Reset();
 		EmitIncPC(i);
-		EmitRestoreHostRegs();
+		cg->ret();
 	}
 
 	cg->L(end);
@@ -1183,6 +1184,136 @@ EE_JIT::Emitter::Emitter()
 	cg = new Xbyak::CodeGenerator(0xffffff, (void*)base);
 	reg_alloc = new RegisterAllocator();
 	reg_alloc->Reset();
+
+	reg_alloc->MarkRegUsed(RegisterAllocator::RDI);
+	reg_alloc->MarkRegUsed(RegisterAllocator::RAX);
+
+	Xbyak::Reg64 func_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg32 next_pc = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+	Xbyak::Reg32 pc = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+	Xbyak::Reg32 isBranchDelayed = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+	
+	cg->endbr64();
+	EmitSaveHostRegs();
+
+	// RSP + 0: pc
+	// RSP + 4: next_pc
+	// RSP + 8: isBranch
+	// RSP + 16: isBranchDelayed
+	// RSP + 20: instrs_emitted
+	// RSP + 24 .. RSP + 32: Wasted space for alignment reasons
+	cg->sub(cg->rsp, 32);
+
+	cg->mov(cg->dword[cg->rsp + 0], 0);
+	cg->mov(cg->dword[cg->rsp + 4], 0);
+	cg->mov(cg->dword[cg->rsp + 8], 0);
+	cg->mov(cg->dword[cg->rsp + 16], 0);
+	cg->mov(cg->dword[cg->rsp + 20], 0);
+	cg->mov(cg->dword[cg->rsp + 24], 0);
+
+	Xbyak::Label begin;
+	cg->L(begin);
+
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(EmotionEngine::CheckCacheFull));
+	cg->call(func_ptr);
+	
+	auto next_pc_off = (offsetof(EmotionEngine::ProcessorState, next_pc));
+	auto pc_off = (offsetof(EmotionEngine::ProcessorState, pc));
+
+	cg->mov(next_pc, cg->dword[cg->rbp + next_pc_off]);
+	cg->mov(pc, cg->dword[cg->rbp + pc_off]);
+
+	cg->mov(cg->dword[cg->rsp], pc);
+	cg->mov(cg->dword[cg->rsp + 4], next_pc);
+
+	cg->mov(cg->edi, cg->dword[cg->rsp]);
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(EmotionEngine::DoesBlockExit));
+	cg->call(func_ptr);
+
+	cg->test(cg->al, cg->al);
+
+	Xbyak::Label block;
+	cg->jne(block, Xbyak::CodeGenerator::T_NEAR);
+
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(EmotionEngine::EmitPrequel));
+	cg->call(func_ptr);
+
+	Xbyak::Label compile_instr;
+	cg->L(compile_instr);
+
+	cg->add(cg->dword[cg->rsp + 20], 1);
+	cg->mov(cg->edi, cg->dword[cg->rsp]);
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(Bus::Read32));
+	cg->call(func_ptr);
+	
+	cg->mov(next_pc, cg->dword[cg->rsp + 4]);
+	cg->mov(cg->dword[cg->rsp], next_pc);
+	cg->add(cg->dword[cg->rsp + 4], 4);
+
+	cg->mov(cg->rdi, cg->rax);
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(EmotionEngine::EmitIR));
+	cg->call(func_ptr);
+
+	cg->mov(isBranchDelayed, cg->dword[cg->rsp + 16]);
+	cg->mov(cg->dword[cg->rsp + 8], isBranchDelayed);
+	
+	
+	cg->mov(cg->edi, cg->dword[cg->rsp]);
+	cg->sub(cg->edi, 4);
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(Bus::Read32));
+	cg->call(func_ptr);
+	cg->mov(cg->edi, cg->eax);
+	cg->mov(cg->eax, 0);
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(EmotionEngine::IsBranch));
+	cg->call(func_ptr);
+	cg->mov(cg->dword[cg->rsp + 16], cg->eax);
+
+	Xbyak::Label block_compiled;
+
+	cg->cmp(cg->dword[cg->rsp + 20], 20);
+	cg->je(block_compiled);
+	cg->mov(isBranchDelayed, cg->dword[cg->rsp + 8]);
+	cg->cmp(isBranchDelayed, 1);
+	cg->jge(block_compiled);
+
+	cg->jmp(compile_instr);
+
+	cg->L(block_compiled);
+
+	cg->mov(cg->edi, cg->dword[cg->rsp + 20]);
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(EmotionEngine::EmitDone));
+	cg->call(func_ptr);
+
+	cg->call(cg->rax);
+	cg->mov(cg->rdi, cg->dword[cg->rsp + 20]);
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(Scheduler::CheckScheduler));
+	cg->call(func_ptr);
+
+	cg->jmp(begin);
+
+	cg->L(block);
+
+	cg->mov(cg->rdi, cg->dword[cg->rsp]);
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(EmotionEngine::GetExistingBlockFunc));
+	cg->call(func_ptr);
+	cg->call(cg->rax);
+
+	cg->mov(cg->rdi, cg->dword[cg->rsp]);
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(EmotionEngine::GetExistingBlockCycles));
+	cg->call(func_ptr);
+	cg->mov(cg->rdi, cg->rax);
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(Scheduler::CheckScheduler));
+	cg->call(func_ptr);
+
+	cg->jmp(begin);
+	
+	cg->add(cg->rsp, 32);
+	EmitRestoreHostRegs();
+
+	dispatcher_entry = (EE_JIT::JIT::EntryFunc)base;
+	base += cg->getSize();
+
+	Dump();
 }
 
 void EE_JIT::Emitter::Dump()
@@ -1206,6 +1337,13 @@ void EE_JIT::Emitter::TranslateBlock(Block *block)
 	{
 		EmitIR(i);
 	}
+
+	cg->ret();
+}
+
+void EE_JIT::Emitter::EnterDispatcher()
+{
+	dispatcher_entry();
 }
 
 const uint8_t *EE_JIT::Emitter::GetFreeBase()

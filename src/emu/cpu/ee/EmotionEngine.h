@@ -42,6 +42,10 @@ enum IRInstrs
 	UpdateCopCount = 26,
 	POR = 27,
 	NOR = 28,
+	LDL = 29,
+	LDR = 30,
+	SDL = 31,
+	SDR = 32,
 };
 
 struct IRValue
@@ -179,6 +183,8 @@ private:
 	void EmitBEQL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x14
 	void EmitBNEL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x15
 	void EmitDADDIU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x19
+	void EmitLDL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1a
+	void EmitLDR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1b
 	void EmitLQ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1f
 	void EmitSQ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1f
 	void EmitLB(uint32_t instr, EE_JIT::IRInstruction& i); // 0x20
@@ -186,9 +192,12 @@ private:
 	void EmitLW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x23
 	void EmitLBU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x24
 	void EmitLHU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x25
+	void EmitLWU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x27
 	void EmitSB(uint32_t instr, EE_JIT::IRInstruction& i); // 0x28
 	void EmitSH(uint32_t instr, EE_JIT::IRInstruction& i); // 0x29
 	void EmitSW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2B
+	void EmitSDL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2C
+	void EmitSDR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2D
 	void EmitLD(uint32_t instr, EE_JIT::IRInstruction& i); // 0x37
 	void EmitSWC1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x39
 	void EmitSD(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3f
@@ -280,6 +289,15 @@ int Clock();
 void Dump();
 ProcessorState* GetState();
 void MarkDirty(uint32_t address, uint32_t size);
+void EmitPrequel();
+
+void CheckCacheFull();
+bool DoesBlockExit(uint32_t addr);
+void EmitIR(uint32_t instr);
+bool IsBranch(uint32_t instr);
+EE_JIT::JIT::EntryFunc EmitDone(int cycles_taken);
+EE_JIT::JIT::EntryFunc GetExistingBlockFunc(uint32_t addr);
+uint64_t GetExistingBlockCycles(uint32_t addr);
 
 inline const char* Reg(int index)
     {

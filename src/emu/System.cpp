@@ -5,13 +5,39 @@
 #include <emu/memory/Bus.h>
 #include <emu/cpu/ee/EmotionEngine.h>
 #include <emu/sched/scheduler.h>
+#include <emu/cpu/ee/vu.h>
 
 Scheduler::Event vsync_event;
 
+#include <chrono>
+#include <iostream>
+
+std::chrono::steady_clock::time_point first_tp;
+unsigned long frame_count = 0;
+
+std::chrono::duration<double> uptime()
+{
+	if (first_tp == std::chrono::steady_clock::time_point{})
+		return std::chrono::duration<double>{0};
+	
+	return std::chrono::steady_clock::now() - first_tp;
+}
+
+double fps()
+{
+	const double uptime_sec = uptime().count();
+
+	if (uptime_sec == 0)
+		return 0;
+	
+	return frame_count / uptime_sec;
+}
+
 void HandleVsync()
 {
-	printf("Vsync\n");
+	// printf("FPS: %f\n", fps());
 	Scheduler::ScheduleEvent(vsync_event);
+	frame_count++;
 }
 
 void System::LoadBios(std::string biosName)
@@ -47,19 +73,18 @@ void System::Reset()
 	vsync_event.name = "VSYNC handler";
 	vsync_event.cycles_from_now = 4920115;
 	Scheduler::ScheduleEvent(vsync_event);
+
+	first_tp = std::chrono::steady_clock::now();
 }
 
 void System::Run()
 {
-	while (1)
-	{
-		int cycles = EmotionEngine::Clock();
-		Scheduler::CheckScheduler(cycles);
-	}
+	EmotionEngine::Clock();
 }
 
 void System::Dump()
 {
 	EmotionEngine::Dump();
 	Bus::Dump();
+	VectorUnit::Dump();
 }
