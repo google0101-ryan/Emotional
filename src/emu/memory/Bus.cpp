@@ -122,6 +122,8 @@ uint32_t Bus::Read32(uint32_t addr)
 	case 0x1000f430:
 	case 0x1f80141c:
 		return 0;
+	case 0x1000f000:
+		return INTC_STAT;
 	case 0x1000f010:
 		return INTC_MASK;
 	case 0x1000f440:
@@ -274,6 +276,9 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 	case 0x1000f480:
 	case 0x1000f490:
 	case 0x1f80141c:
+		return;
+	case 0x1000f000:
+		INTC_STAT &= ~(data);
 		return;
 	case 0x1000f010:
 		INTC_MASK = data;

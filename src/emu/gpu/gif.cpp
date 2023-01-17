@@ -13,6 +13,8 @@ uint32_t regCount = 0;
 
 uint32_t curTransferSize = 0;
 
+bool event_scheduled = false;
+
 std::queue<uint128_t> fifo;
 
 union GIF_CTRL
@@ -49,8 +51,18 @@ void Reset()
 
 void ProcessGIFData()
 {
-	printf("Processing qword from GIF FIFO\n");
 	fifo.pop();
+	if (!fifo.empty())
+	{
+		Scheduler::Event event;
+		event.cycles_from_now = 5;
+		event.name = "GIF Data Processing";
+		event.func = ProcessGIFData;
+
+		Scheduler::ScheduleEvent(event);
+	}
+	else
+		event_scheduled = false;
 }
 
 void WriteCtrl32(uint32_t data)
@@ -77,11 +89,16 @@ void WriteFIFO(uint128_t data)
 		fifo.push(data);
 	}
 	
-	Scheduler::Event event;
-	event.cycles_from_now = curTransferSize;
-	event.name = "GIF Data Processing";
-	event.func = ProcessGIFData;
+	if (!event_scheduled)
+	{
+		Scheduler::Event event;
+		event.cycles_from_now = curTransferSize;
+		event.name = "GIF Data Processing";
+		event.func = ProcessGIFData;
 
-	Scheduler::ScheduleEvent(event);
+		event_scheduled = true;
+
+		Scheduler::ScheduleEvent(event);
+	}
 }
 }
