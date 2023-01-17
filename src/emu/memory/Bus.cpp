@@ -10,6 +10,7 @@
 #include <emu/gpu/gif.hpp>
 #include <emu/gpu/gs.h>
 #include <emu/cpu/ee/dmac.hpp>
+#include <emu/cpu/ee/vu.h>
 
 uint8_t BiosRom[0x400000];
 uint8_t spr[0x4000];
@@ -104,8 +105,6 @@ uint32_t Bus::Read32(uint32_t addr)
 {
 	addr = Translate(addr);
 
-	
-
 	if (addr >= 0x1fc00000 && addr < 0x20000000)
 		return *(uint32_t*)&BiosRom[addr - 0x1fc00000];
 	if (addr >= 0x70000000 && addr < 0x70004000)
@@ -156,6 +155,8 @@ uint32_t Bus::Read32(uint32_t addr)
 		return GIF::ReadStat();
 	case 0x1000E010:
 		return DMAC::ReadDSTAT();
+	case 0x1000E020:
+		return DMAC::ReadDPCR();
 	}
 	
 	printf("Read32 from unknown address 0x%08x\n", addr);
@@ -209,6 +210,12 @@ void Bus::Write128(uint32_t addr, uint128_t data)
 		return;
 	}
 
+	if (addr >= 0x1100C000 && addr < 0x11010000)
+	{
+		VectorUnit::WriteDataMem128(1, addr, data);
+		return;
+	}
+
 	switch (addr)
 	{
 	case 0x10006000:
@@ -216,7 +223,7 @@ void Bus::Write128(uint32_t addr, uint128_t data)
 		return;
 	}
 
-	printf("Write128 to unknown address 0x%08x\n", addr);
+	printf("Write128 0x%lx%016lx to unknown address 0x%08x\n", data.u64[1], data.u64[0], addr);
 	exit(1);
 }
 
@@ -262,7 +269,7 @@ void Bus::Write64(uint32_t addr, uint64_t data)
 		return;
 	}
 
-	printf("Write64 to unknown address 0x%08x\n", addr);
+	printf("Write64 0x%08lx to unknown address 0x%08x\n", data, addr);
 	exit(1);
 }
 
@@ -406,8 +413,19 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 	case 0x1000D480:
 		DMAC::WriteSPRTOChannel(addr, data);
 		return;
+	case 0x1000E000:
+		DMAC::WriteDCTRL(data);
+		return;
 	case 0x1000E010:
 		DMAC::WriteDSTAT(data);
+		return;
+	case 0x1000E020:
+		DMAC::WriteDPCR(data);
+		return;
+	case 0x1000E030:
+		DMAC::WriteSQWC(data);
+	case 0x1000E040:
+	case 0x1000E050:
 		return;
 	}
 

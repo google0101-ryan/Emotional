@@ -31,6 +31,7 @@ private:
 	void EmitBC(IRInstruction i);
 	void EmitIncPC(IRInstruction i);
 	void EmitOR(IRInstruction i);
+	void EmitNOR(IRInstruction i);
 	void EmitXOR(IRInstruction i);
 	void EmitAND(IRInstruction i);
 	void EmitJA(IRInstruction i);

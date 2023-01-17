@@ -1063,6 +1063,26 @@ void JIT::EmitOR(uint32_t instr, EE_JIT::IRInstruction &i)
 	cur_block->ir.push_back(i);
 }
 
+void JIT::EmitNOR(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	// printf("nor %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue source = IRValue(IRValue::Reg);
+	IRValue source2 = IRValue(IRValue::Reg);
+	source.SetReg(rs);
+	dest.SetReg(rd);
+	source2.SetReg(rt);
+
+	i = IRInstruction::Build({dest, source, source2}, IRInstrs::NOR);
+
+	cur_block->ir.push_back(i);
+}
+
 void JIT::EmitSLT(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	int rd = (instr >> 11) & 0x1F;
@@ -1445,6 +1465,9 @@ void JIT::EmitIR(uint32_t instr)
 		case 0x25:
 			EmitOR(instr, current_instruction);
 			break;
+		case 0x27:
+			EmitNOR(instr, current_instruction);
+			break;
 		case 0x2A:
 			EmitSLT(instr, current_instruction);
 			break;
@@ -1530,6 +1553,44 @@ void JIT::EmitIR(uint32_t instr)
 	case 0x10:
 		EmitCOP0(instr, current_instruction);
 		break;
+	case 0x12:
+	{
+		opcode = (instr >> 21) & 0x1F;
+		switch (opcode)
+		{
+		case 0x02:
+		case 0x06:
+			printf("[WARNING]: Ignoring CFC2/CTC2\n");
+			break;
+		case 0x10 ... 0x3F:
+			opcode = instr & 0x3F;
+			switch (opcode)
+			{
+			case 0x3c ... 0x3f:
+			{
+				uint8_t fhi = (instr >> 6) & 0x1F;
+				uint8_t flo = instr & 0b11;
+				opcode = flo | (fhi * 4);
+
+				switch (opcode)
+				{
+				default:
+					printf("[emu/CPU]: Cannot emit unknown cop2 special2 instruction 0x%02x (0x%08x)\n", opcode, instr);
+					break;
+				}
+				break;
+			}
+			default:
+				printf("[emu/CPU]: Cannot emit unknown cop2 special1 instruction 0x%02x\n", opcode);
+				break;
+			}
+			break;
+		default:
+			printf("[emu/CPU]: Cannot emit unknown cop2 instruction 0x%02x\n", opcode);
+			break;
+		}
+		break;
+	}
 	case 0x14:
 		EmitBEQL(instr, current_instruction);
 		break;
@@ -1619,7 +1680,7 @@ void JIT::EmitIR(uint32_t instr)
 		EmitSD(instr, current_instruction);
 		break;
 	default:
-		printf("[emu/CPU]: Cannot emit unknown instruction 0x%02x\n", opcode);
+		printf("[emu/CPU]: Cannot emit unknown instruction 0x%02x (0x%08x)\n", opcode, instr);
 		delete cur_block;
 		exit(1);
 	}

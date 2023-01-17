@@ -22,4 +22,11 @@ void WriteSPRTOChannel(uint32_t addr, uint32_t data);
 void WriteDSTAT(uint32_t data);
 uint32_t ReadDSTAT();
 
+void WriteDCTRL(uint32_t data);
+
+void WriteDPCR(uint32_t data);
+uint32_t ReadDPCR();
+
+void WriteSQWC(uint32_t data);
+
 }

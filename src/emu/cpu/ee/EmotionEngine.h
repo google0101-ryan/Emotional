@@ -41,6 +41,7 @@ enum IRInstrs
 	XOR = 25,
 	UpdateCopCount = 26,
 	POR = 27,
+	NOR = 28,
 };
 
 struct IRValue
@@ -213,6 +214,7 @@ private:
 	void EmitSUBU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x23
 	void EmitAND(uint32_t instr, EE_JIT::IRInstruction& i); // 0x24
 	void EmitOR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x25
+	void EmitNOR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x27
 	void EmitSLT(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2A
 	void EmitSLTU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2B
 	void EmitDADDU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2D
@@ -265,6 +267,10 @@ struct ProcessorState
 		int32_t s;
 		float f;
 	} fprs[32];
+	// 0-15 are VI00-VI15, standard integer registers
+	// 16-32 are control registers, including VU1's for some reason
+	// In fact, you can start a VU1 microprogram through CTC2, because... yeah
+	uint32_t cop2_regs[32];
 
 	uint32_t pc_at;
 };

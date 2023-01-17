@@ -281,6 +281,10 @@ union DSTAT
 	};
 } stat;
 
+uint32_t ctrl;
+uint32_t dpcr;
+uint32_t sqwc;
+
 void WriteDSTAT(uint32_t data)
 {
     stat.clear &= ~(data & 0xffff);
@@ -290,5 +294,25 @@ void WriteDSTAT(uint32_t data)
 uint32_t ReadDSTAT()
 {
     return stat.value;
+}
+
+void WriteDCTRL(uint32_t data)
+{
+    ctrl = data;
+}
+
+void WriteDPCR(uint32_t data)
+{
+    dpcr = data;
+}
+
+uint32_t ReadDPCR()
+{
+    return dpcr;
+}
+
+void WriteSQWC(uint32_t data)
+{
+    sqwc = data;
 }
 }

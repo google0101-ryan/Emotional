@@ -259,6 +259,46 @@ void EE_JIT::Emitter::EmitOR(IRInstruction i)
 	}
 }
 
+void EE_JIT::Emitter::EmitNOR(IRInstruction i)
+{
+	if (i.args[2].IsImm())
+	{
+		Xbyak::Reg64 src_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+		Xbyak::Reg64 dest_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+		Xbyak::Reg64 src_value = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+
+		auto src_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[1].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+		auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+
+
+		cg->lea(src_ptr, cg->ptr[cg->rbp + src_offset]);
+		cg->mov(src_value, cg->dword[src_ptr]);
+		cg->or_(src_value, i.args[2].GetImm());
+		cg->not_(src_value);
+		cg->lea(dest_ptr, cg->ptr[cg->rbp + dest_offset]);
+		cg->mov(cg->dword[dest_ptr], src_value);
+	}
+	else if (i.args[2].IsReg())
+	{
+		Xbyak::Reg64 src1 = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+		Xbyak::Reg64 src2 = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+		auto src1_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[2].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+		auto src2_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[1].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+		auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+
+		cg->mov(src1, cg->dword[cg->rbp + src1_offset]);
+		cg->mov(src2, cg->dword[cg->rbp + src2_offset]);
+		cg->or_(src1, src2);
+		cg->not_(src1);
+		cg->mov(cg->dword[cg->rbp + dest_offset], src1);
+	}
+	else
+	{
+		printf("[emu/JIT]: Unknown OR argument\n");
+		exit(1);
+	}
+}
+
 void EE_JIT::Emitter::EmitXOR(IRInstruction i)
 {
 	if (i.args[2].IsImm())
@@ -1118,6 +1158,9 @@ void EE_JIT::Emitter::EmitIR(IRInstruction i)
 		break;
 	case POR:
 		EmitPOR(i);
+		break;
+	case NOR:
+		EmitNOR(i);
 		break;
 	default:
 		printf("[JIT/Emit]: Unknown IR instruction %d\n", i.instr);
