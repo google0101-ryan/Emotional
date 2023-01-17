@@ -1,4 +1,4 @@
-// (c) Copyright 2022 Ryan Ilari
+// (c) Copyright 2022-2023 Ryan Ilari
 // This code is licensed under MIT license (see LICENSE for details)
 
 #include "EmotionEngine.h"
@@ -738,6 +738,29 @@ void JIT::EmitSLLV(uint32_t instr, EE_JIT::IRInstruction &i)
 	cur_block->ir.push_back(i);
 }
 
+void JIT::EmitSRAV(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	// printf("srav %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue src = IRValue(IRValue::Reg);
+	IRValue shamt = IRValue(IRValue::Reg);
+	
+	dest.SetReg(rd);
+	src.SetReg(rt);
+	shamt.SetReg(rs);
+
+	i = IRInstruction::Build({dest, src, shamt}, IRInstrs::Shift);
+	i.direction = IRInstruction::Direction::Right;
+	i.is_logical = false;
+
+	cur_block->ir.push_back(i);
+}
+
 void JIT::EmitJR(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	int rs = (instr >> 21) & 0x1F;
@@ -1104,6 +1127,29 @@ void JIT::EmitDADDU(uint32_t instr, EE_JIT::IRInstruction &i)
 	cur_block->ir.push_back(i);
 }
 
+void JIT::EmitDSLL(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int sa = (instr >> 6) & 0x1F;
+
+	// printf("dsll %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue src = IRValue(IRValue::Reg);
+	IRValue shift = IRValue(IRValue::Imm);
+	
+	dest.SetReg(rd);
+	src.SetReg(rt);
+	shift.SetImm32Unsigned(sa);
+
+	i = IRInstruction::Build({dest, src, shift}, IRInstrs::Shift64);
+	i.is_logical = true;
+	i.direction = IRInstruction::Left;
+
+	cur_block->ir.push_back(i);	
+}
+
 void JIT::EmitDSLL32(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	int rd = (instr >> 11) & 0x1F;
@@ -1345,6 +1391,9 @@ void JIT::EmitIR(uint32_t instr)
 		case 0x04:
 			EmitSLLV(instr, current_instruction);
 			break;
+		case 0x07:
+			EmitSRAV(instr, current_instruction);
+			break;
 		case 0x08:
 			EmitJR(instr, current_instruction);
 			break;
@@ -1404,6 +1453,9 @@ void JIT::EmitIR(uint32_t instr)
 			break;
 		case 0x2D:
 			EmitDADDU(instr, current_instruction);
+			break;
+		case 0x38:
+			EmitDSLL(instr, current_instruction);
 			break;
 		case 0x3C:
 			EmitDSLL32(instr, current_instruction);

@@ -9,6 +9,7 @@
 #include <emu/cpu/ee/EmotionEngine.h>
 #include <emu/gpu/gif.hpp>
 #include <emu/gpu/gs.h>
+#include <emu/cpu/ee/dmac.hpp>
 
 uint8_t BiosRom[0x400000];
 uint8_t spr[0x4000];
@@ -153,6 +154,8 @@ uint32_t Bus::Read32(uint32_t addr)
 	}
 	case 0x10003020:
 		return GIF::ReadStat();
+	case 0x1000E010:
+		return DMAC::ReadDSTAT();
 	}
 	
 	printf("Read32 from unknown address 0x%08x\n", addr);
@@ -239,6 +242,24 @@ void Bus::Write64(uint32_t addr, uint64_t data)
 	case 0x12001000:
 		GS::WriteGSCSR(data);
 		return;
+	case 0x12000010:
+		GS::WriteGSSMODE1(data);
+		return;
+	case 0x12000020:
+		GS::WriteGSSMODE2(data);
+		return;
+	case 0x12000030:
+		GS::WriteGSSRFSH(data);
+		return;
+	case 0x12000040:
+		GS::WriteGSSYNCH1(data);
+		return;
+	case 0x12000050:
+		GS::WriteGSSYNCH2(data);
+		return;
+	case 0x12000060:
+		GS::WriteGSSYNCV(data);
+		return;
 	}
 
 	printf("Write64 to unknown address 0x%08x\n", addr);
@@ -303,9 +324,94 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 	case 0x10003000:
 		GIF::WriteCtrl32(data);
 		return;
+	// Timers
+	case 0x10000000:
+	case 0x10000010:
+	case 0x10000020:
+	case 0x10000030:
+	case 0x10000800:
+	case 0x10000810:
+	case 0x10000820:
+	case 0x10000830:
+	case 0x10001000:
+	case 0x10001010:
+	case 0x10001020:
+	case 0x10001030:
+	case 0x10001800:
+	case 0x10001810:
+	case 0x10001820:
+	case 0x10001830:
+		return;
+	case 0x10008000:
+	case 0x10008010:
+	case 0x10008030:
+	case 0x10008040:
+	case 0x10008050:
+	case 0x10008080:
+		DMAC::WriteVIF0Channel(addr, data);
+		return;
+	case 0x10009000:
+	case 0x10009010:
+	case 0x10009030:
+	case 0x10009040:
+	case 0x10009050:
+	case 0x10009080:
+		DMAC::WriteVIF1Channel(addr, data);
+		return;
+	case 0x1000A000:
+	case 0x1000A010:
+	case 0x1000A030:
+	case 0x1000A040:
+	case 0x1000A050:
+	case 0x1000A080:
+		DMAC::WriteGIFChannel(addr, data);
+		return;
+	case 0x1000B000:
+	case 0x1000B010:
+	case 0x1000B030:
+	case 0x1000B040:
+	case 0x1000B050:
+	case 0x1000B080:
+		DMAC::WriteIPUFROMChannel(addr, data);
+		return;
+	case 0x1000B400:
+	case 0x1000B410:
+	case 0x1000B430:
+	case 0x1000B440:
+	case 0x1000B450:
+	case 0x1000B480:
+		DMAC::WriteIPUTOChannel(addr, data);
+		return;
+	case 0x1000C000:
+	case 0x1000C010:
+	case 0x1000C030:
+	case 0x1000C040:
+	case 0x1000C050:
+	case 0x1000C080:
+		DMAC::WriteSIF0Channel(addr, data);
+		return;
+	case 0x1000D000:
+	case 0x1000D010:
+	case 0x1000D030:
+	case 0x1000D040:
+	case 0x1000D050:
+	case 0x1000D080:
+		DMAC::WriteSPRFROMChannel(addr, data);
+		return;
+	case 0x1000D400:
+	case 0x1000D410:
+	case 0x1000D430:
+	case 0x1000D440:
+	case 0x1000D450:
+	case 0x1000D480:
+		DMAC::WriteSPRTOChannel(addr, data);
+		return;
+	case 0x1000E010:
+		DMAC::WriteDSTAT(data);
+		return;
 	}
 
-	printf("Write32 to unknown address 0x%08x\n", addr);
+	printf("Write32 0x%08x to unknown address 0x%08x\n", data, addr);
 	exit(1);
 }
 
@@ -321,7 +427,7 @@ void Bus::Write16(uint32_t addr, uint16_t data)
 		return;
 	}
 
-	if ((addr & 0xFF000000) == 0x1A000000)
+	if (((addr & 0xFF000000) == 0x1A000000) || ((addr & 0xFFF00000) == 0x1F800000))
 		return;
 
 	printf("Write16 to unknown address 0x%08x\n", addr);

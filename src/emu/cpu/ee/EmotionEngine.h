@@ -1,4 +1,4 @@
-// (c) Copyright 2022 Ryan Ilari
+// (c) Copyright 2022-2023 Ryan Ilari
 // This code is licensed under MIT license (see LICENSE for details)
 
 #pragma once
@@ -196,6 +196,7 @@ private:
 	void EmitSRL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
 	void EmitSRA(uint32_t instr, EE_JIT::IRInstruction& i); // 0x03
 	void EmitSLLV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x04
+	void EmitSRAV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x07
 	void EmitJR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x08
 	void EmitJALR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x09
 	void EmitMOVZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0A
@@ -215,6 +216,7 @@ private:
 	void EmitSLT(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2A
 	void EmitSLTU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2B
 	void EmitDADDU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2D
+	void EmitDSLL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x38
 	void EmitDSLL32(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3C
 	void EmitDSRA32(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3F
 	
