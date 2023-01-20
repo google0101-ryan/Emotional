@@ -1864,11 +1864,11 @@ bool JIT::DoesBlockExist(uint32_t addr)
 
 void JIT::CheckCacheFull()
 {
-	if (blockCache.size() >= 0x2000)
+	if (blockCache.size() >= (4096*1024))
 	{
 		emit->ResetFreeBase();
-		for (auto b : blockCache)
-			delete b.second;
+		// for (auto b : blockCache)
+		// 	delete b.second;
 		blockCache.clear();
 	}
 }

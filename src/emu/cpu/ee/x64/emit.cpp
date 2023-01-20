@@ -702,6 +702,52 @@ void EE_JIT::Emitter::EmitMemoryLoad(IRInstruction i)
 		cg->mov(cg->dword[cg->rbp + val_offset + sizeof(uint64_t)], cg->rdx);
 }
 
+static const uint64_t LDL_MASK[8] =
+{
+    0x00ffffffffffffffULL, 0x0000ffffffffffffULL, 0x000000ffffffffffULL, 0x00000000ffffffffULL,
+    0x0000000000ffffffULL, 0x000000000000ffffULL, 0x00000000000000ffULL, 0x0000000000000000ULL
+};
+static const uint8_t LDL_SHIFT[8] = { 56, 48, 40, 32, 24, 16, 8, 0 };
+
+void EE_JIT::Emitter::EmitLDL(IRInstruction i)
+{
+	reg_alloc->MarkRegUsed(RegisterAllocator::RDI);
+	reg_alloc->MarkRegUsed(RegisterAllocator::RAX);
+	reg_alloc->MarkRegUsed(RegisterAllocator::RDX);
+	reg_alloc->MarkRegUsed(RegisterAllocator::RCX);
+
+	Xbyak::Reg64 ee_base_value = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg64 reg_val = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	auto base_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[2].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+	auto val_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
+	
+	cg->mov(ee_base_value, cg->qword[cg->rbp + base_offset]);
+	cg->add(ee_base_value, i.args[1].GetImm());
+	
+	cg->mov(cg->ecx, ee_base_value);
+	cg->and_(cg->ecx, ~0x7);
+	cg->mov(cg->rdi, cg->ecx);
+	cg->mov(reg_val, reinterpret_cast<uint64_t>(Bus::Read64));
+	cg->call(reg_val);
+
+	cg->and_(ee_base_value, 0x7);
+	cg->shl(ee_base_value, 0x3);
+	cg->mov(cg->ecx, 56);
+	cg->sub(ee_base_value, cg->ecx);
+	cg->shl(cg->rax, cg->cl);
+
+	cg->sub(cg->cx, 0x40);
+	cg->neg(cg->cx);
+	cg->xor_(ee_base_value, ee_base_value);
+	cg->cmp(cg->cx, 0x40);
+	cg->cmove(reg_val, ee_base_value);
+	cg->shl(reg_val, cg->cl);
+	cg->shr(reg_val, cg->cl);
+	cg->or_(reg_val, cg->rax);
+
+	cg->mov(cg->qword[cg->rbp + val_offset], reg_val);
+}
+
 void EE_JIT::Emitter::EmitShift(IRInstruction i)
 {
 	if (i.args[2].IsImm())
@@ -1162,6 +1208,9 @@ void EE_JIT::Emitter::EmitIR(IRInstruction i)
 		break;
 	case NOR:
 		EmitNOR(i);
+		break;
+	case LDL:
+		EmitLDL(i);
 		break;
 	default:
 		printf("[JIT/Emit]: Unknown IR instruction %d\n", i.instr);

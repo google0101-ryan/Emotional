@@ -52,8 +52,46 @@ void Reset()
 	fifo.swap(empty_fifo);
 }
 
+union GIFTag
+{
+	__uint128_t value;
+	struct
+	{
+		__uint128_t nloop : 15,
+		eop : 1,
+		: 30,
+		prim_en : 1,
+		prim_data : 11,
+		fmt : 2,
+		nregs : 4,
+		reg : 64;
+	};
+} tag;
+
+int data_count = 0;
+
 void ProcessGIFData()
 {
+	if (!data_count)
+	{
+		tag.value = fifo.front().u128;
+		data_count = tag.nloop;
+		printf("[emu/GIF]: Received GIFTag: nloop: 0%04x, eop: %d, prim_en: %d, prim_data: 0x%04x, fmt: %d, nregs: %d, regs: 0x%08lx\n", 
+											tag.nloop, tag.eop, tag.prim_en, tag.prim_data, tag.fmt, tag.nregs, tag.reg);
+	}
+	else
+	{
+		switch (tag.fmt)
+		{
+		case 0:
+			break;
+		default:
+			printf("Unknown GIFTAG format %d\n", tag.fmt);
+			exit(1);
+		}
+		data_count--;
+	}
+
 	fifo.pop();
 	if (!fifo.empty())
 	{

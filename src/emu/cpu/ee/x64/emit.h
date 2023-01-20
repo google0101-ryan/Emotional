@@ -41,6 +41,7 @@ private:
 	void EmitSub(IRInstruction i);
 	void EmitMemoryStore(IRInstruction i);
 	void EmitMemoryLoad(IRInstruction i);
+	void EmitLDL(IRInstruction i);
 	void EmitShift(IRInstruction i);
 	void EmitShift64(IRInstruction i);
 	void EmitMULT(IRInstruction i);
