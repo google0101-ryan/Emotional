@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 #include <cinttypes>
+#include <emu/cpu/iop/cpu.h>
 
 namespace Scheduler
 {
@@ -41,9 +42,13 @@ void ScheduleEvent(Event event)
 	std::push_heap(event_queue.begin(), event_queue.end(), CompareEvents);
 }
 
+int iop_cycles = 0;
+
 void CheckScheduler(int cycles)
 {
 	global_cycles += cycles;
+
+	IOP_MANAGEMENT::Clock(cycles / 4);
 
 	if (event_queue.empty())
 		return;

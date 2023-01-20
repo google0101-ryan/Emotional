@@ -6,6 +6,7 @@
 #include <emu/cpu/ee/EmotionEngine.h>
 #include <emu/sched/scheduler.h>
 #include <emu/cpu/ee/vu.h>
+#include <emu/cpu/iop/cpu.h>
 
 Scheduler::Event vsync_event;
 
@@ -69,6 +70,8 @@ void System::Reset()
 	Scheduler::InitScheduler();
 	EmotionEngine::Reset();
 
+	IOP_MANAGEMENT::Reset();
+
 	vsync_event.func = HandleVsync;
 	vsync_event.name = "VSYNC handler";
 	vsync_event.cycles_from_now = 4920115;
@@ -87,4 +90,5 @@ void System::Dump()
 	EmotionEngine::Dump();
 	Bus::Dump();
 	VectorUnit::Dump();
+	IOP_MANAGEMENT::Dump();
 }

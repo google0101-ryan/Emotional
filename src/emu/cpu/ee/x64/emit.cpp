@@ -422,6 +422,20 @@ void EE_JIT::Emitter::EmitJA(IRInstruction i)
 	}
 }
 
+void PrintAboutStrnchr()
+{
+	if (EmotionEngine::GetState()->next_pc == 0x8000d638)
+	{
+		printf("strnchr(0x%08x, %d, %d)\n", EmotionEngine::GetState()->regs[4].u32[0], EmotionEngine::GetState()->regs[5].u32[0], EmotionEngine::GetState()->regs[6].u32[0]);
+		exit(1);
+	}
+	if (EmotionEngine::GetState()->next_pc == 0x8000d550)
+	{
+		printf("memcpy(0x%08x, 0x%08x, %d)\n", EmotionEngine::GetState()->regs[4].u32[0], EmotionEngine::GetState()->regs[5].u32[0], EmotionEngine::GetState()->regs[6].u32[0]);
+		exit(1);
+	}
+}
+
 void EE_JIT::Emitter::EmitJumpImm(IRInstruction i)
 {
 	if (i.should_link)
@@ -441,6 +455,9 @@ void EE_JIT::Emitter::EmitJumpImm(IRInstruction i)
 	cg->and_(cur_pc_value, 0xf0000000);
 	cg->or_(cur_pc_value, i.args[0].GetImm());
 	cg->mov(cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)], cur_pc_value);
+	
+	// cg->mov(cg->rax, reinterpret_cast<uint64_t>(PrintAboutStrnchr));
+	// cg->call(cg->rax);
 }
 
 void EE_JIT::Emitter::EmitAdd(IRInstruction i)
@@ -497,10 +514,9 @@ void EE_JIT::Emitter::EmitAdd(IRInstruction i)
 			Xbyak::Reg32 ee_src1_value = Xbyak::Reg32(reg_alloc->AllocHostRegister());
 			Xbyak::Reg32 ee_src2_value = Xbyak::Reg32(reg_alloc->AllocHostRegister());
 			Xbyak::Reg64 ee_src2_ex_value = Xbyak::Reg64(reg_alloc->AllocHostRegister());
-			
 
-			auto src1_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[2].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
-			auto src2_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[1].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
+			auto src1_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[1].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+			auto src2_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[2].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
 			auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
 
 			cg->mov(ee_src1_value, cg->dword[cg->rbp + src1_offset]);
@@ -702,50 +718,110 @@ void EE_JIT::Emitter::EmitMemoryLoad(IRInstruction i)
 		cg->mov(cg->dword[cg->rbp + val_offset + sizeof(uint64_t)], cg->rdx);
 }
 
-static const uint64_t LDL_MASK[8] =
+void _LDL(uint32_t instruction)
 {
-    0x00ffffffffffffffULL, 0x0000ffffffffffffULL, 0x000000ffffffffffULL, 0x00000000ffffffffULL,
-    0x0000000000ffffffULL, 0x000000000000ffffULL, 0x00000000000000ffULL, 0x0000000000000000ULL
-};
-static const uint8_t LDL_SHIFT[8] = { 56, 48, 40, 32, 24, 16, 8, 0 };
+	static const uint64_t LDL_MASK[8] =
+    {	0x00ffffffffffffffULL, 0x0000ffffffffffffULL, 0x000000ffffffffffULL, 0x00000000ffffffffULL,
+        0x0000000000ffffffULL, 0x000000000000ffffULL, 0x00000000000000ffULL, 0x0000000000000000ULL
+    };
+    static const uint8_t LDL_SHIFT[8] = { 56, 48, 40, 32, 24, 16, 8, 0 };
+	int16_t imm = (int16_t)(instruction & 0xFFFF);
+    uint64_t dest = (instruction >> 16) & 0x1F;
+    uint64_t base = (instruction >> 21) & 0x1F;
+
+	uint32_t addr = EmotionEngine::GetState()->regs[base].u32[0] + imm;
+	uint32_t shift = addr & 0x7;
+
+	uint64_t mem = Bus::Read64(addr & ~0x7);
+	uint64_t reg = EmotionEngine::GetState()->regs[dest].u64[0];
+	EmotionEngine::GetState()->regs[dest].u64[0] = (reg & LDL_MASK[shift]) | (mem << LDL_SHIFT[shift]);
+}
 
 void EE_JIT::Emitter::EmitLDL(IRInstruction i)
 {
-	reg_alloc->MarkRegUsed(RegisterAllocator::RDI);
-	reg_alloc->MarkRegUsed(RegisterAllocator::RAX);
-	reg_alloc->MarkRegUsed(RegisterAllocator::RDX);
-	reg_alloc->MarkRegUsed(RegisterAllocator::RCX);
+	cg->mov(cg->edi, i.opcode);
+	cg->mov(cg->rax, reinterpret_cast<uint64_t>(_LDL));
+	cg->call(cg->rax);
+}
 
-	Xbyak::Reg64 ee_base_value = Xbyak::Reg64(reg_alloc->AllocHostRegister());
-	Xbyak::Reg64 reg_val = Xbyak::Reg64(reg_alloc->AllocHostRegister());
-	auto base_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[2].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
-	auto val_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
-	
-	cg->mov(ee_base_value, cg->qword[cg->rbp + base_offset]);
-	cg->add(ee_base_value, i.args[1].GetImm());
-	
-	cg->mov(cg->ecx, ee_base_value);
-	cg->and_(cg->ecx, ~0x7);
-	cg->mov(cg->rdi, cg->ecx);
-	cg->mov(reg_val, reinterpret_cast<uint64_t>(Bus::Read64));
-	cg->call(reg_val);
+void _LDR(uint32_t instruction)
+{
+	static const uint64_t LDR_MASK[8] =
+    {	0x0000000000000000ULL, 0xff00000000000000ULL, 0xffff000000000000ULL, 0xffffff0000000000ULL,
+        0xffffffff00000000ULL, 0xffffffffff000000ULL, 0xffffffffffff0000ULL, 0xffffffffffffff00ULL
+    };
+    static const uint8_t LDR_SHIFT[8] = { 0, 8, 16, 24, 32, 40, 48, 56 };
+    int16_t imm = (int16_t)(instruction & 0xFFFF);
+    uint64_t dest = (instruction >> 16) & 0x1F;
+    uint64_t base = (instruction >> 21) & 0x1F;
 
-	cg->and_(ee_base_value, 0x7);
-	cg->shl(ee_base_value, 0x3);
-	cg->mov(cg->ecx, 56);
-	cg->sub(ee_base_value, cg->ecx);
-	cg->shl(cg->rax, cg->cl);
+	uint32_t addr = EmotionEngine::GetState()->regs[base].u32[0] + imm;
+	uint32_t shift = addr & 0x7;
 
-	cg->sub(cg->cx, 0x40);
-	cg->neg(cg->cx);
-	cg->xor_(ee_base_value, ee_base_value);
-	cg->cmp(cg->cx, 0x40);
-	cg->cmove(reg_val, ee_base_value);
-	cg->shl(reg_val, cg->cl);
-	cg->shr(reg_val, cg->cl);
-	cg->or_(reg_val, cg->rax);
+	uint64_t mem = Bus::Read64(addr & ~0x7);
+	uint64_t reg = EmotionEngine::GetState()->regs[dest].u64[0];
+	EmotionEngine::GetState()->regs[dest].u64[0] = (reg & LDR_MASK[shift]) | (mem >> LDR_SHIFT[shift]);
+}
 
-	cg->mov(cg->qword[cg->rbp + val_offset], reg_val);
+void EE_JIT::Emitter::EmitLDR(IRInstruction i)
+{
+	cg->mov(cg->edi, i.opcode);
+	cg->mov(cg->rax, reinterpret_cast<uint64_t>(_LDR));
+	cg->call(cg->rax);
+}
+
+void _SDL(uint32_t cur_instr)
+{
+	static const uint64_t SDL_MASK[8] =
+    {	0xffffffffffffff00ULL, 0xffffffffffff0000ULL, 0xffffffffff000000ULL, 0xffffffff00000000ULL,
+        0xffffff0000000000ULL, 0xffff000000000000ULL, 0xff00000000000000ULL, 0x0000000000000000ULL
+    };
+    static const uint8_t SDL_SHIFT[8] = { 56, 48, 40, 32, 24, 16, 8, 0 };
+	int16_t imm = (int16_t)(cur_instr & 0xFFFF);
+	uint64_t source = (cur_instr >> 16) & 0x1F;
+    uint64_t base = (cur_instr >> 21) & 0x1F;
+
+	uint32_t addr = EmotionEngine::GetState()->regs[base].u32[0] + imm;
+
+	uint32_t shift = addr & 0x7;
+
+	uint64_t mem = Bus::Read64(addr & ~0x7);
+	mem = (EmotionEngine::GetState()->regs[source].u64[0] >> SDL_SHIFT[shift]) | (mem & SDL_MASK[shift]);
+	Bus::Write64(addr & ~0x7, mem);
+}
+
+void EE_JIT::Emitter::EmitSDL(IRInstruction i)
+{
+	cg->mov(cg->edi, i.opcode);
+	cg->mov(cg->rax, reinterpret_cast<uint64_t>(_SDL));
+	cg->call(cg->rax);
+}
+
+void _SDR(uint32_t instruction)
+{
+	static const uint64_t SDR_MASK[8] =
+    {	0x0000000000000000ULL, 0x00000000000000ffULL, 0x000000000000ffffULL, 0x0000000000ffffffULL,
+        0x00000000ffffffffULL, 0x000000ffffffffffULL, 0x0000ffffffffffffULL, 0x00ffffffffffffffULL
+    };
+    static const uint8_t SDR_SHIFT[8] = { 0, 8, 16, 24, 32, 40, 48, 56 };
+    int16_t imm = (int16_t)(instruction & 0xFFFF);
+    uint64_t source = (instruction >> 16) & 0x1F;
+    uint64_t base = (instruction >> 21) & 0x1F;
+
+    uint32_t addr = EmotionEngine::GetState()->regs[base].u32[0] + imm;
+    uint32_t shift = addr & 0x7;
+
+    uint64_t mem = Bus::Read64(addr & ~0x7);
+    mem = (EmotionEngine::GetState()->regs[source].u64[0] << SDR_SHIFT[shift]) |
+            (mem & SDR_MASK[shift]);
+    Bus::Write64(addr & ~0x7, mem);
+}
+
+void EE_JIT::Emitter::EmitSDR(IRInstruction i)
+{
+	cg->mov(cg->edi, i.opcode);
+	cg->mov(cg->rax, reinterpret_cast<uint64_t>(_SDR));
+	cg->call(cg->rax);
 }
 
 void EE_JIT::Emitter::EmitShift(IRInstruction i)
@@ -1212,6 +1288,15 @@ void EE_JIT::Emitter::EmitIR(IRInstruction i)
 	case LDL:
 		EmitLDL(i);
 		break;
+	case LDR:
+		EmitLDR(i);
+		break;
+	case SDL:
+		EmitSDL(i);
+		break;
+	case SDR:
+		EmitSDR(i);
+		break;
 	default:
 		printf("[JIT/Emit]: Unknown IR instruction %d\n", i.instr);
 		exit(1);
@@ -1257,11 +1342,12 @@ EE_JIT::Emitter::Emitter()
 	cg->mov(cg->dword[cg->rsp + 4], 0);
 	cg->mov(cg->dword[cg->rsp + 8], 0);
 	cg->mov(cg->dword[cg->rsp + 16], 0);
-	cg->mov(cg->dword[cg->rsp + 20], 0);
 	cg->mov(cg->dword[cg->rsp + 24], 0);
 
 	Xbyak::Label begin;
 	cg->L(begin);
+	
+	cg->mov(cg->dword[cg->rsp + 20], 0);
 
 	cg->mov(func_ptr, reinterpret_cast<uint64_t>(EmotionEngine::CheckCacheFull));
 	cg->call(func_ptr);
@@ -1334,7 +1420,8 @@ EE_JIT::Emitter::Emitter()
 	cg->call(func_ptr);
 
 	cg->call(cg->rax);
-	cg->mov(cg->rdi, cg->dword[cg->rsp + 20]);
+
+	cg->mov(cg->edi, cg->dword[cg->rsp + 20]);
 	cg->mov(func_ptr, reinterpret_cast<uint64_t>(Scheduler::CheckScheduler));
 	cg->call(func_ptr);
 

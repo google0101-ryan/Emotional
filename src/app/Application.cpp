@@ -25,8 +25,8 @@ bool Application::Init(int argc, char** argv)
 
     printf("[app/App]: %s: Initializing System\n", __FUNCTION__);
 
-	System::Reset();
 	System::LoadBios(argv[1]);
+	System::Reset();
 
     std::atexit(Application::Exit);
     // signal(SIGSEGV, Sig);

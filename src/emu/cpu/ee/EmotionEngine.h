@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_map>
 #include <util/uint128.h>
+#include <3party/robin_hood.h>
 
 namespace EE_JIT
 {
@@ -150,6 +151,8 @@ struct IRInstruction
 
 		return i;
 	}
+
+	uint32_t opcode;
 };
 
 struct Block
@@ -164,7 +167,7 @@ class JIT
 {
 private:
 	Block* cur_block;
-	std::unordered_map<uint32_t, Block*> blockCache;
+	robin_hood::unordered_flat_map<uint32_t, Block*> blockCache;
 
 	void EmitJ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
 	void EmitJAL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x03
@@ -206,6 +209,7 @@ private:
 	void EmitSRL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
 	void EmitSRA(uint32_t instr, EE_JIT::IRInstruction& i); // 0x03
 	void EmitSLLV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x04
+	void EmitSRLV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x06
 	void EmitSRAV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x07
 	void EmitJR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x08
 	void EmitJALR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x09
@@ -228,7 +232,9 @@ private:
 	void EmitSLTU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2B
 	void EmitDADDU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2D
 	void EmitDSLL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x38
+	void EmitDSRL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3A
 	void EmitDSLL32(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3C
+	void EmitDSRL32(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3E
 	void EmitDSRA32(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3F
 	
 	void EmitBLTZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00

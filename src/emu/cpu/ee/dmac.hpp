@@ -19,10 +19,13 @@ void WriteSIF2Channel(uint32_t addr, uint32_t data);
 void WriteSPRFROMChannel(uint32_t addr, uint32_t data);
 void WriteSPRTOChannel(uint32_t addr, uint32_t data);
 
+uint32_t ReadSIF0Channel(uint32_t addr);
+
 void WriteDSTAT(uint32_t data);
 uint32_t ReadDSTAT();
 
 void WriteDCTRL(uint32_t data);
+uint32_t ReadDCTRL();
 
 void WriteDPCR(uint32_t data);
 uint32_t ReadDPCR();

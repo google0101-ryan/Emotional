@@ -10,6 +10,8 @@ namespace EmotionEngine
 	ProcessorState state;
 }
 
+EE_JIT::Block* top_level_cache[0xFF];
+
 namespace EE_JIT
 {
 
@@ -255,7 +257,7 @@ void JIT::EmitLUI(uint32_t instr, EE_JIT::IRInstruction &i)
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue imm = IRValue(IRValue::Imm);
 	dest.SetReg(rt);
-	imm.SetImm32(((int32_t)(int16_t)(instr & 0xffff)) << 16);
+	imm.SetImm32(((int32_t)(((int16_t)(instr & 0xffff))) << 16));
 
 	i = IRInstruction::Build({dest, imm}, IRInstrs::MOV);
 
@@ -370,6 +372,7 @@ void JIT::EmitLDL(uint32_t instr, EE_JIT::IRInstruction &i)
 	offset.SetImm(_offset);
 
 	i = IRInstruction::Build({rt, offset, base}, IRInstrs::LDL);
+	i.opcode = instr;
 	
 	cur_block->ir.push_back(i);
 }
@@ -391,6 +394,7 @@ void JIT::EmitLDR(uint32_t instr, EE_JIT::IRInstruction &i)
 	offset.SetImm(_offset);
 
 	i = IRInstruction::Build({rt, offset, base}, IRInstrs::LDR);
+	i.opcode = instr;
 	
 	cur_block->ir.push_back(i);
 }
@@ -491,8 +495,6 @@ void JIT::EmitLW(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _rt = (instr >> 16) & 0x1F;
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
-
-	// printf("lw %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -662,6 +664,7 @@ void JIT::EmitSDL(uint32_t instr, EE_JIT::IRInstruction &i)
 	offset.SetImm(_offset);
 
 	i = IRInstruction::Build({rt, offset, base}, IRInstrs::SDL);
+	i.opcode = instr;
 	
 	cur_block->ir.push_back(i);
 }
@@ -683,6 +686,7 @@ void JIT::EmitSDR(uint32_t instr, EE_JIT::IRInstruction &i)
 	offset.SetImm(_offset);
 
 	i = IRInstruction::Build({rt, offset, base}, IRInstrs::SDR);
+	i.opcode = instr;
 	
 	cur_block->ir.push_back(i);
 }
@@ -841,6 +845,29 @@ void JIT::EmitSLLV(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	i = IRInstruction::Build({dest, src, shamt}, IRInstrs::Shift);
 	i.direction = IRInstruction::Direction::Left;
+	i.is_logical = true;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitSRLV(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	// printf("srav %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue src = IRValue(IRValue::Reg);
+	IRValue shamt = IRValue(IRValue::Reg);
+	
+	dest.SetReg(rd);
+	src.SetReg(rt);
+	shamt.SetReg(rs);
+
+	i = IRInstruction::Build({dest, src, shamt}, IRInstrs::Shift);
+	i.direction = IRInstruction::Direction::Right;
 	i.is_logical = true;
 
 	cur_block->ir.push_back(i);
@@ -1278,6 +1305,29 @@ void JIT::EmitDSLL(uint32_t instr, EE_JIT::IRInstruction &i)
 	cur_block->ir.push_back(i);	
 }
 
+void JIT::EmitDSRL(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int sa = (instr >> 6) & 0x1F;
+
+	// printf("dsrl %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue src = IRValue(IRValue::Reg);
+	IRValue shift = IRValue(IRValue::Imm);
+	
+	dest.SetReg(rd);
+	src.SetReg(rt);
+	shift.SetImm32Unsigned(sa);
+
+	i = IRInstruction::Build({dest, src, shift}, IRInstrs::Shift64);
+	i.is_logical = true;
+	i.direction = IRInstruction::Right;
+
+	cur_block->ir.push_back(i);	
+}
+
 void JIT::EmitDSLL32(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	int rd = (instr >> 11) & 0x1F;
@@ -1297,6 +1347,29 @@ void JIT::EmitDSLL32(uint32_t instr, EE_JIT::IRInstruction &i)
 	i = IRInstruction::Build({dest, src, shift}, IRInstrs::Shift64);
 	i.is_logical = true;
 	i.direction = IRInstruction::Left;
+
+	cur_block->ir.push_back(i);	
+}
+
+void JIT::EmitDSRL32(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int sa = (instr >> 6) & 0x1F;
+
+	// printf("dsrl32 %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue src = IRValue(IRValue::Reg);
+	IRValue shift = IRValue(IRValue::Imm);
+	
+	dest.SetReg(rd);
+	src.SetReg(rt);
+	shift.SetImm32Unsigned(sa+32);
+
+	i = IRInstruction::Build({dest, src, shift}, IRInstrs::Shift64);
+	i.is_logical = true;
+	i.direction = IRInstruction::Right;
 
 	cur_block->ir.push_back(i);	
 }
@@ -1519,6 +1592,9 @@ void JIT::EmitIR(uint32_t instr)
 		case 0x04:
 			EmitSLLV(instr, current_instruction);
 			break;
+		case 0x06:
+			EmitSRLV(instr, current_instruction);
+			break;
 		case 0x07:
 			EmitSRAV(instr, current_instruction);
 			break;
@@ -1588,14 +1664,20 @@ void JIT::EmitIR(uint32_t instr)
 		case 0x38:
 			EmitDSLL(instr, current_instruction);
 			break;
+		case 0x3A:
+			EmitDSRL(instr, current_instruction);
+			break;
 		case 0x3C:
 			EmitDSLL32(instr, current_instruction);
+			break;
+		case 0x3E:
+			EmitDSRL32(instr, current_instruction);
 			break;
 		case 0x3F:
 			EmitDSRA32(instr, current_instruction);
 			break;
 		default:
-			// printf("[emu/CPU]: Cannot emit unknown special instruction 0x%02x\n", opcode);
+			printf("[emu/CPU]: Cannot emit unknown special instruction 0x%02x\n", opcode);
 			cur_block->ir.clear();
 			delete cur_block;
 			exit(1);
@@ -1614,7 +1696,7 @@ void JIT::EmitIR(uint32_t instr)
 			EmitBGEZ(instr, current_instruction);
 			break;
 		default:
-			// printf("Unknown regimm opcode 0x%02x\n", opcode);
+			printf("Unknown regimm opcode 0x%02x\n", opcode);
 			exit(1);
 		}
 		break;
@@ -1739,6 +1821,19 @@ void JIT::EmitIR(uint32_t instr)
 		case 0x1B:
 			EmitDIVU1(instr, current_instruction);
 			break;
+		case 0x28:
+		{
+			opcode = (instr >> 5) & 0x1F;
+
+			switch (opcode)
+			{
+			default:
+				printf("[emu/CPU]: Cannot emit unknown mmi1 instruction 0x%02x\n", opcode);
+				delete cur_block;
+				exit(1);
+			}
+			break;
+		}
 		case 0x29:
 		{
 			opcode = (instr >> 5) & 0x1F;
@@ -1839,6 +1934,9 @@ JIT::EntryFunc JIT::EmitDone(size_t cycles_taken)
 	cur_block->ir.push_back(i);
 
 	blockCache[cur_block->guest_addr] = cur_block;
+
+	top_level_cache[cur_block->guest_addr >> 24] = cur_block;
+
 	EE_JIT::emit->TranslateBlock(cur_block);
 
 	cur_block->cycles = cycles_taken;
@@ -1848,10 +1946,9 @@ JIT::EntryFunc JIT::EmitDone(size_t cycles_taken)
 
 Block* JIT::GetExistingBlock(uint32_t start)
 {
-	if (!blockCache[start])
+	if (top_level_cache[start >> 24] && top_level_cache[start >> 24]->guest_addr == start)
 	{
-		// printf("ERROR: Block doesn't exist at 0x%08x\n", start);
-		exit(1);
+		return top_level_cache[start >> 24];
 	}
 
 	return blockCache[start];
@@ -1859,12 +1956,17 @@ Block* JIT::GetExistingBlock(uint32_t start)
 
 bool JIT::DoesBlockExist(uint32_t addr)
 {
+	if (top_level_cache[addr >> 24] && top_level_cache[addr >> 24]->guest_addr == addr)
+	{
+		return true;
+	}
+
 	return blockCache.find(addr) != blockCache.end();
 }
 
 void JIT::CheckCacheFull()
 {
-	if (blockCache.size() >= (4096*1024))
+	if (blockCache.size() >= 75)
 	{
 		emit->ResetFreeBase();
 		// for (auto b : blockCache)

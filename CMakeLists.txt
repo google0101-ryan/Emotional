@@ -14,9 +14,14 @@ set(SOURCES src/main.cpp
 			src/emu/cpu/ee/vif.cpp
 			src/emu/cpu/ee/x64/reg_alloc.cpp
 			src/emu/cpu/ee/x64/emit.cpp
+			src/emu/cpu/iop/cpu.cpp
+			src/emu/cpu/iop/opcodes.cpp
+			src/emu/cpu/iop/dma.cpp
 			src/emu/sched/scheduler.cpp
 			src/emu/gpu/gif.cpp
-			src/emu/gpu/gs.cpp)
+			src/emu/gpu/gs.cpp
+			src/emu/dev/sif.cpp
+			src/emu/dev/cdvd.cpp)
 
 set(CMAKE_BUILD_TYPE Debug)
 

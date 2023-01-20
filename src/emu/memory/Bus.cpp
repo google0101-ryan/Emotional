@@ -12,18 +12,20 @@
 #include <emu/cpu/ee/dmac.hpp>
 #include <emu/cpu/ee/vu.h>
 #include <emu/cpu/ee/vif.h>
+#include <emu/dev/sif.h>
 
-uint8_t BiosRom[0x400000];
+uint8_t* BiosRom;
 uint8_t spr[0x4000];
 uint8_t ram[0x2000000];
-uint8_t iop_ram[0x200000];
+uint8_t* iop_ram;
 
 uint32_t MCH_DRD, MCH_RICM;
 uint32_t rdram_sdevid;
 
 uint32_t INTC_MASK = 0, INTC_STAT = 0;
+uint32_t Bus::I_MASK = 0, Bus::I_STAT = 0, Bus::I_CTRL = 0;
 
-static uint32_t Translate(uint32_t addr)
+uint32_t Translate(uint32_t addr)
 {
     constexpr uint32_t KUSEG_MASKS[8] = 
     {
@@ -51,6 +53,9 @@ std::ofstream console;
 
 void Bus::LoadBios(uint8_t *data)
 {
+	BiosRom = new uint8_t[0x400000];
+	iop_ram = new uint8_t[0x200000];
+
 	memcpy(BiosRom, data, 0x400000);
 	console.open("console.txt");
 }
@@ -71,6 +76,15 @@ void Bus::Dump()
 	for (int i = 0; i < 0x2000000; i++)
 	{
 		dump << (char)ram[i];
+	}
+
+	dump.close();
+
+	dump.open("psx_cpu_ram.dump");
+
+	for (int i = 0; i < 0x200000; i++)
+	{
+		dump << (char)iop_ram[i];
 	}
 
 	dump.close();
@@ -154,10 +168,22 @@ uint32_t Bus::Read32(uint32_t addr)
 	}
 	case 0x10003020:
 		return GIF::ReadStat();
+	case 0x1000C000:
+		return DMAC::ReadSIF0Channel(addr);
+	case 0x1000E000:
+		return DMAC::ReadDCTRL();
 	case 0x1000E010:
 		return DMAC::ReadDSTAT();
 	case 0x1000E020:
 		return DMAC::ReadDPCR();
+	case 0x1000F200:
+		return SIF::ReadMSCOM_EE();
+	case 0x1000F210:
+		return SIF::ReadSMCOM();
+	case 0x1000F220:
+		return SIF::ReadMSFLG();
+	case 0x1000F230:
+		return SIF::ReadSMFLG();
 	case 0x10002010:
 		return 0;
 	}
@@ -328,6 +354,11 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 		*(uint32_t*)&ram[addr] = data;
 		return;
 	}
+	if (addr >= 0x1C000000 && addr < 0x1C200000)
+	{
+		*(uint32_t*)&iop_ram[addr-0x1C000000] = data;
+		return;
+	}
 
 	switch (addr)
 	{
@@ -431,11 +462,29 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 		return;
 	case 0x1000C000:
 	case 0x1000C010:
+	case 0x1000C020:
 	case 0x1000C030:
 	case 0x1000C040:
 	case 0x1000C050:
 	case 0x1000C080:
 		DMAC::WriteSIF0Channel(addr, data);
+		return;
+	case 0x1000C400:
+	case 0x1000C410:
+	case 0x1000C420:
+	case 0x1000C430:
+	case 0x1000C440:
+	case 0x1000C450:
+	case 0x1000C480:
+		DMAC::WriteSIF1Channel(addr, data);
+		return;
+	case 0x1000C800:
+	case 0x1000C810:
+	case 0x1000C830:
+	case 0x1000C840:
+	case 0x1000C850:
+	case 0x1000C880:
+		DMAC::WriteSIF2Channel(addr, data);
 		return;
 	case 0x1000D000:
 	case 0x1000D010:
@@ -481,6 +530,18 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 		return;
 	case 0x10002000:
 	case 0x10002010:
+		return;
+	case 0x1000F200:
+		SIF::WriteMSCOM_EE(data);
+		return;
+	case 0x1000F220:
+		SIF::WriteMSFLG_EE(data);
+		return;
+	case 0x1000F240:
+		SIF::WriteCTRL_EE(data);
+		return;
+	case 0x1000F260:
+		SIF::WriteBD6_EE(data);
 		return;
 	}
 
