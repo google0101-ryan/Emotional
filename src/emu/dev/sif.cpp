@@ -17,6 +17,11 @@ void SIF::WriteMSFLG_EE(uint32_t data)
 	msflg |= data;
 }
 
+void SIF::WriteSMFLG_EE(uint32_t data)
+{
+	smflg &= ~data;
+}
+
 void SIF::WriteCTRL_EE(uint32_t data)
 {
 	if (!(data & 0x100))

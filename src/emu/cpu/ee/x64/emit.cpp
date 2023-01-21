@@ -1204,22 +1204,27 @@ void EE_JIT::Emitter::EmitDI(IRInstruction i)
 	cg->mov(stat_reg, cg->dword[cg->rbp + stat_offset]);
 	cg->mov(intermediate_reg, stat_reg);
 
-	Xbyak::Label not_set;
+	Xbyak::Label set, end;
 
 	cg->and_(intermediate_reg, (1 << 17));
-	cg->jne(not_set);
+	cg->je(set);
 	cg->mov(intermediate_reg, stat_reg);
 	cg->and_(intermediate_reg, (1 << 1));
-	cg->jne(not_set);
+	cg->je(set);
 	cg->mov(intermediate_reg, stat_reg);
 	cg->and_(intermediate_reg, (1 << 2));
-	cg->jne(not_set);
+	cg->je(set);
+
+	cg->jmp(end);
+
+	cg->L(set);
+
 	cg->mov(intermediate_reg, stat_reg);
 
 	cg->and_(stat_reg, ~(1 << 16));
 	cg->mov(cg->dword[cg->rbp + stat_offset], stat_reg);
 
-	cg->L(not_set);
+	cg->L(end);
 }
 
 void HandleERET()
@@ -1255,6 +1260,39 @@ void EE_JIT::Emitter::EmitSyscall(IRInstruction i)
 	reg_alloc->Reset();
 	EmitIncPC(i);
 	cg->ret();
+}
+
+void EE_JIT::Emitter::EmitEI(IRInstruction i)
+{
+	Xbyak::Reg32 stat_reg = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+	Xbyak::Reg32 intermediate_reg = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+
+	auto stat_offset = ((offsetof(EmotionEngine::ProcessorState, cop0_regs) + (sizeof(uint32_t) * 12)));
+
+	cg->mov(stat_reg, cg->dword[cg->rbp + stat_offset]);
+	cg->mov(intermediate_reg, stat_reg);
+
+	Xbyak::Label set, end;
+
+	cg->and_(intermediate_reg, (1 << 17));
+	cg->jne(set);
+	cg->mov(intermediate_reg, stat_reg);
+	cg->and_(intermediate_reg, (1 << 1));
+	cg->jne(set);
+	cg->mov(intermediate_reg, stat_reg);
+	cg->and_(intermediate_reg, (1 << 2));
+	cg->jne(set);
+
+	cg->jmp(end);
+
+	cg->L(set);
+
+	cg->mov(intermediate_reg, stat_reg);
+
+	cg->or_(stat_reg, 1 << 16);
+	cg->mov(cg->dword[cg->rbp + stat_offset], stat_reg);
+
+	cg->L(end);
 }
 
 void HandleUhOh()
@@ -1397,6 +1435,9 @@ void EE_JIT::Emitter::EmitIR(IRInstruction i)
 	case DI:
 		EmitDI(i);
 		break;
+	case EI:
+		EmitEI(i);
+		break;
 	case ERET:
 		EmitERET(i);
 		break;
@@ -1452,7 +1493,7 @@ EE_JIT::Emitter::Emitter()
 
 	Xbyak::Label begin;
 	cg->L(begin);
-	
+
 	cg->mov(cg->dword[cg->rsp + 20], 0);
 
 	cg->mov(func_ptr, reinterpret_cast<uint64_t>(EmotionEngine::CheckCacheFull));

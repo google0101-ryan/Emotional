@@ -60,6 +60,7 @@ private:
 	void EmitDI(IRInstruction i);
 	void EmitERET(IRInstruction i);
 	void EmitSyscall(IRInstruction i);
+	void EmitEI(IRInstruction i);
 
 	EE_JIT::JIT::EntryFunc dispatcher_entry;
 public:

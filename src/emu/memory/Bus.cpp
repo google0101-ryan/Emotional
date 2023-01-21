@@ -169,6 +169,7 @@ uint32_t Bus::Read32(uint32_t addr)
 	case 0x10003020:
 		return GIF::ReadStat();
 	case 0x1000C000:
+	case 0x1000C020:
 		return DMAC::ReadSIF0Channel(addr);
 	case 0x1000E000:
 		return DMAC::ReadDCTRL();
@@ -536,6 +537,9 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 		return;
 	case 0x1000F220:
 		SIF::WriteMSFLG_EE(data);
+		return;
+	case 0x1000F230:
+		SIF::WriteSMFLG_EE(data);
 		return;
 	case 0x1000F240:
 		SIF::WriteCTRL_EE(data);

@@ -218,8 +218,6 @@ void HandleSIF0Transfer()
 {
 	auto& c = channels[5];
 
-	assert(c.chcr.mode == 1 && "Unhandled SIF0 mode!");
-
 	if (channels[5].qwc > 0)
 	{
 	}
@@ -231,7 +229,7 @@ void HandleSIF0Transfer()
 			printf("Oh crap, I gotta do stuff now\n");
 			exit(1);
 		}
-		else
+		else if (c.chcr.start) // Make sure our transfer wasn't canceled by the EE
 		{
 			// Try again in two cycles to see if SIF's fifo0 has filled
 			Scheduler::Event sif0_evt;
@@ -246,7 +244,7 @@ void HandleSIF0Transfer()
 
 void WriteSIF0Channel(uint32_t addr, uint32_t data)
 {
-	printf("[emu/SIF1]: Writing 0x%08x to %s of SIF0 channel\n", data, REG_NAMES[(addr >> 4) & 0xf]);
+	printf("[emu/DMAC]: Writing 0x%08x to %s of SIF0 channel\n", data, REG_NAMES[(addr >> 4) & 0xf]);
 
     switch (addr & 0xff)
     {
@@ -289,7 +287,7 @@ void WriteSIF0Channel(uint32_t addr, uint32_t data)
 
 void WriteSIF1Channel(uint32_t addr, uint32_t data)
 {
-	printf("[emu/SIF1]: Writing 0x%08x to %s of SIF1 channel\n", data, REG_NAMES[(addr >> 4) & 0xf]);
+	printf("[emu/DMAC]: Writing 0x%08x to %s of SIF1 channel\n", data, REG_NAMES[(addr >> 4) & 0xf]);
 
     switch (addr & 0xff)
     {
@@ -405,6 +403,8 @@ uint32_t ReadSIF0Channel(uint32_t addr)
     {
 	case 0x00:
 		return channels[5].chcr.data;
+	case 0x20:
+		return channels[5].qwc;
 	}
 }
 

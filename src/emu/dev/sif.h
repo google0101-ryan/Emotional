@@ -7,6 +7,7 @@ namespace SIF
 
 void WriteMSCOM_EE(uint32_t data);
 void WriteMSFLG_EE(uint32_t data);
+void WriteSMFLG_EE(uint32_t data);
 void WriteCTRL_EE(uint32_t data);
 void WriteBD6_EE(uint32_t data);
 

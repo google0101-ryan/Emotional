@@ -294,6 +294,10 @@ void JIT::EmitCOP0(uint32_t instr, EE_JIT::IRInstruction &i)
 		case 0x18:
 			EmitERET(instr, i);
 			break;
+		case 0x38:
+			i = IRInstruction::Build({}, IRInstrs::EI);
+			cur_block->ir.push_back(i);
+			break;
 		case 0x39:
 			i = IRInstruction::Build({}, IRInstrs::DI);
 			cur_block->ir.push_back(i);
@@ -999,6 +1003,8 @@ void JIT::EmitMOVN(uint32_t instr, EE_JIT::IRInstruction &i)
 
 void JIT::EmitSyscall(uint32_t instr, EE_JIT::IRInstruction &i)
 {
+	printf("syscall\n");
+
 	i = IRInstruction::Build({}, IRInstrs::SYSCALL);
 	cur_block->ir.push_back(i);
 }
@@ -2309,6 +2315,8 @@ union COP0Status
 
 void Exception(uint8_t code)
 {
+	printf("Syscall %d\n", EmotionEngine::state.regs[3].u32[0]);
+
 	static uint32_t exception_addr[2] = { 0x80000000, 0xBFC00200 };
 
 	COP0CAUSE cause;

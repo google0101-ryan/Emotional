@@ -51,7 +51,6 @@ void IopDma::WriteDPCR2(uint32_t data)
 
 void IopDma::WriteDMACEN(uint32_t data)
 {
-	printf("[emu/IopDma]: Writing 0x%08x to DMACEN\n", data);
 	dmacen = data & 1;
 
 	if (dmacen)

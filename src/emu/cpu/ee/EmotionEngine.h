@@ -51,6 +51,7 @@ enum IRInstrs
 	DI = 34,
 	ERET = 35,
 	SYSCALL = 36,
+	EI = 37,
 };
 
 struct IRValue
