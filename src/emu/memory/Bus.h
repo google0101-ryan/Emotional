@@ -80,6 +80,14 @@ T iop_read(uint32_t addr)
 		return IopDma::ReadDICR2();
 	case 0x1f801578:
 		return IopDma::ReadDMACEN();
+	// Timers
+	case 0x1F801100 ... 0x1F801108:
+	case 0x1F801110 ... 0x1F801118:
+	case 0x1F801120 ... 0x1F801128:
+	case 0x1F801480 ... 0x1F801488:
+	case 0x1F801490 ... 0x1F801498:
+	case 0x1F8014A0 ... 0x1F8014A8:
+		return 0;
 	}
 
 	printf("[emu/IopBus]: Read from unknown addr 0x%08x\n", addr);

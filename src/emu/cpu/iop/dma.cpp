@@ -9,26 +9,24 @@ uint32_t dicr2 = 0;
 
 union DN_CHCR
 {
-	uint32_t data;
-	struct
-	{
-		uint32_t direction : 1;
-		uint32_t madr_inc : 1;
-		uint32_t : 6;
-		uint32_t mode_specific : 1;
-		uint32_t mode : 2;
-		uint32_t : 5;
-		uint32_t chopping_dma_size : 3;
-		uint32_t : 1;
-		uint32_t chopping_cpu_size : 3;
-		uint32_t : 1;
-		uint32_t start : 1;
-		uint32_t : 3;
-		uint32_t force_transfer : 1;
-		uint32_t forced_burst_pause : 1;
-		uint32_t bus_snooping : 1;
-		uint32_t iLink_thingy : 1;
-	};
+	uint32_t value;
+		struct
+		{
+			uint32_t direction : 1;
+			uint32_t increment : 1;
+			uint32_t : 6;
+			uint32_t bit_8 : 1;
+			uint32_t transfer_mode : 2;
+			uint32_t : 5;
+			uint32_t chop_dma : 3;
+			uint32_t : 1;
+			uint32_t chop_cpu : 3;
+			uint32_t : 1;
+			uint32_t running : 1;
+			uint32_t : 3;
+			uint32_t trigger : 1;
+			uint32_t : 3;
+		};
 };
 
 struct DMAChannels
@@ -55,6 +53,18 @@ void IopDma::WriteDMACEN(uint32_t data)
 {
 	printf("[emu/IopDma]: Writing 0x%08x to DMACEN\n", data);
 	dmacen = data & 1;
+
+	if (dmacen)
+	{
+		for (int i = 0; i < 13; i++)
+		{
+			auto& c = channels[i];
+			if (c.chcr.running)
+			{
+				printf("Starting transfer on channel %d\n", i);
+			}
+		}
+	}
 }
 
 void IopDma::WriteDICR(uint32_t data)
@@ -83,7 +93,7 @@ void IopDma::WriteChannel(uint32_t addr, uint32_t data)
 
 	channel -= 0x8;
 
-	printf("Writing 0x%08x to %s of channel %d\n", data, REGS[reg], channel);
+	printf("[emu/IopDma]: Writing 0x%08x to %s of channel %d\n", data, REGS[reg], channel);
 
 	switch (addr)
 	{
@@ -94,14 +104,14 @@ void IopDma::WriteChannel(uint32_t addr, uint32_t data)
 		channels[channel].bcr = data;
 		return;
 	case 0x2:
-		channels[channel].chcr.data = data;
+		channels[channel].chcr.value = data;
 		return;
 	case 0x3:
 		channels[channel].tadr = data;
 		return;
 	}
 
-	if (channels[channel].chcr.start && dmacen)
+	if (channels[channel].chcr.running)
 		printf("[emu/IopDma]: Starting transfer on channel %d\n", channel);
 }
 
@@ -113,7 +123,7 @@ void IopDma::WriteNewChannel(uint32_t addr, uint32_t data)
 
 	channel += 8;
 
-	printf("Writing 0x%08x to %s of channel %d\n", data, REGS[reg], channel);
+	printf("[emu/IopDma]: Writing 0x%08x to %s of channel %d\n", data, REGS[reg], channel);
 
 	switch (addr)
 	{
@@ -124,14 +134,14 @@ void IopDma::WriteNewChannel(uint32_t addr, uint32_t data)
 		channels[channel].bcr = data;
 		return;
 	case 0x2:
-		channels[channel].chcr.data = data;
+		channels[channel].chcr.value = data;
 		return;
 	case 0x3:
 		channels[channel].tadr = data;
 		return;
 	}
 
-	if (channels[channel].chcr.start && dmacen)
+	if (channels[channel].chcr.running)
 		printf("[emu/IopDma]: Starting transfer on channel %d\n", channel);
 }
 

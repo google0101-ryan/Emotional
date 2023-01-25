@@ -47,6 +47,10 @@ enum IRInstrs
 	LDR = 30,
 	SDL = 31,
 	SDR = 32,
+	PADDUSW = 33,
+	DI = 34,
+	ERET = 35,
+	SYSCALL = 36,
 };
 
 struct IRValue
@@ -215,6 +219,7 @@ private:
 	void EmitJALR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x09
 	void EmitMOVZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0A
 	void EmitMOVN(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0B
+	void EmitSyscall(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0C
 	void EmitBreak(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0D
 	void EmitMFHI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x10
 	void EmitMFLO(uint32_t instr, EE_JIT::IRInstruction& i); // 0x12
@@ -239,6 +244,7 @@ private:
 	
 	void EmitBLTZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
 	void EmitBGEZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x01
+	void EmitBLTZL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
 	
 	void EmitMFLO1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x12
 	void EmitMULT1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x18
@@ -246,8 +252,12 @@ private:
 
 	void EmitPOR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x05
 
+	void EmitPADDUW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x10
+
 	void EmitMFC0(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
 	void EmitMTC0(uint32_t instr, EE_JIT::IRInstruction& i); // 0x04
+	void EmitERET(uint32_t instr, EE_JIT::IRInstruction& i); // 0x18
+
 	void EmitIncPC(EE_JIT::IRInstruction& i);
 public:
 	using EntryFunc = void(*)();
@@ -296,6 +306,7 @@ void Dump();
 ProcessorState* GetState();
 void MarkDirty(uint32_t address, uint32_t size);
 void EmitPrequel();
+void Exception(uint8_t code);
 
 void CheckCacheFull();
 bool DoesBlockExit(uint32_t addr);

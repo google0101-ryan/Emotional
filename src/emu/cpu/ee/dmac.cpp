@@ -246,7 +246,7 @@ void HandleSIF0Transfer()
 
 void WriteSIF0Channel(uint32_t addr, uint32_t data)
 {
-	printf("[emu/SIF1]: Writing 0x%08x to %s of SIF1 channel\n", data, REG_NAMES[(addr >> 4) & 0xf]);
+	printf("[emu/SIF1]: Writing 0x%08x to %s of SIF0 channel\n", data, REG_NAMES[(addr >> 4) & 0xf]);
 
     switch (addr & 0xff)
     {

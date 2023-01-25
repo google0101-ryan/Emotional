@@ -1130,11 +1130,26 @@ void EE_JIT::Emitter::EmitBranchRegImm(IRInstruction i)
 		exit(1);
 	}
 
+	Xbyak::Label end;
+
 	cg->mov(next_pc, cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, pc)]);
 	cg->add(next_pc, i.args[1].GetImm());
 	cg->mov(cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)], next_pc);
 
+	cg->jmp(end);
+
 	cg->L(cond_failed);
+
+	if (i.is_likely)
+	{
+		// cg->lea(next_pc, cg->ptr[cg->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)]);
+		// cg->add(cg->dword[next_pc], 4);
+		reg_alloc->Reset();
+		EmitIncPC(i);
+		cg->ret();
+	}
+
+	cg->L(end);
 }
 
 void EE_JIT::Emitter::EmitUpdateCopCount(IRInstruction i)
@@ -1161,6 +1176,85 @@ void EE_JIT::Emitter::EmitPOR(IRInstruction i)
 	cg->por(src1, src2);
 
 	cg->movaps(cg->ptr[cg->rbp + dest_offset], src1);
+}
+
+void EE_JIT::Emitter::EmitPADDUSW(IRInstruction i)
+{
+	Xbyak::Xmm src1 = Xbyak::Xmm(reg_alloc->AllocHostXMMRegister());
+	Xbyak::Xmm src2 = Xbyak::Xmm(reg_alloc->AllocHostXMMRegister());
+	auto reg1_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[1].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u128)));
+	auto reg2_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[2].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u128)));
+	auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u128)));
+	
+	cg->movaps(src1, cg->ptr[cg->rbp + reg1_offset]);
+	cg->movaps(src2, cg->ptr[cg->rbp + reg2_offset]);
+
+	cg->paddusw(src1, src2);
+
+	cg->movaps(cg->ptr[cg->rbp + dest_offset], src1);
+}
+
+void EE_JIT::Emitter::EmitDI(IRInstruction i)
+{
+	Xbyak::Reg32 stat_reg = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+	Xbyak::Reg32 intermediate_reg = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+
+	auto stat_offset = ((offsetof(EmotionEngine::ProcessorState, cop0_regs) + (sizeof(uint32_t) * 12)));
+
+	cg->mov(stat_reg, cg->dword[cg->rbp + stat_offset]);
+	cg->mov(intermediate_reg, stat_reg);
+
+	Xbyak::Label not_set;
+
+	cg->and_(intermediate_reg, (1 << 17));
+	cg->jne(not_set);
+	cg->mov(intermediate_reg, stat_reg);
+	cg->and_(intermediate_reg, (1 << 1));
+	cg->jne(not_set);
+	cg->mov(intermediate_reg, stat_reg);
+	cg->and_(intermediate_reg, (1 << 2));
+	cg->jne(not_set);
+	cg->mov(intermediate_reg, stat_reg);
+
+	cg->and_(stat_reg, ~(1 << 16));
+	cg->mov(cg->dword[cg->rbp + stat_offset], stat_reg);
+
+	cg->L(not_set);
+}
+
+void HandleERET()
+{
+	uint32_t status = EmotionEngine::GetState()->cop0_regs[12];
+
+	if (status & (1 << 2))
+	{
+		EmotionEngine::GetState()->cop0_regs[12] &= ~(1 << 2);
+		EmotionEngine::GetState()->next_pc = EmotionEngine::GetState()->cop0_regs[30];
+	}
+	else
+	{
+		EmotionEngine::GetState()->cop0_regs[12] &= ~(1 << 1);
+		EmotionEngine::GetState()->next_pc = EmotionEngine::GetState()->cop0_regs[14];
+	}
+}
+
+void EE_JIT::Emitter::EmitERET(IRInstruction i)
+{
+	cg->mov(cg->rax, reinterpret_cast<uint64_t>(HandleERET));
+	cg->call(cg->rax);
+	reg_alloc->Reset();
+	EmitIncPC(i);
+	cg->ret();
+}
+
+void EE_JIT::Emitter::EmitSyscall(IRInstruction i)
+{
+	cg->mov(cg->edi, 0x08);
+	cg->mov(cg->rax, reinterpret_cast<uint64_t>(EmotionEngine::Exception));
+	cg->call(cg->rax);
+	reg_alloc->Reset();
+	EmitIncPC(i);
+	cg->ret();
 }
 
 void HandleUhOh()
@@ -1296,6 +1390,18 @@ void EE_JIT::Emitter::EmitIR(IRInstruction i)
 		break;
 	case SDR:
 		EmitSDR(i);
+		break;
+	case PADDUSW:
+		EmitPADDUSW(i);
+		break;
+	case DI:
+		EmitDI(i);
+		break;
+	case ERET:
+		EmitERET(i);
+		break;
+	case SYSCALL:
+		EmitSyscall(i);
 		break;
 	default:
 		printf("[JIT/Emit]: Unknown IR instruction %d\n", i.instr);

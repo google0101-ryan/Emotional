@@ -17,7 +17,7 @@ namespace EE_JIT
 
 void JIT::EmitJ(uint32_t instr, EE_JIT::IRInstruction &i)
 {
-	// printf("j 0x%08x\n", (instr & 0x3ffffff) << 2);
+	printf("j 0x%08x\n", (instr & 0x3ffffff) << 2);
 
 	uint32_t target_address = (instr & 0x3FFFFFF) << 2;
 
@@ -32,7 +32,7 @@ void JIT::EmitJ(uint32_t instr, EE_JIT::IRInstruction &i)
 
 void JIT::EmitJAL(uint32_t instr, EE_JIT::IRInstruction &i)
 {
-	// printf("jal 0x%08x\n", (instr & 0x3ffffff) << 2);
+	printf("jal 0x%08x\n", (instr & 0x3ffffff) << 2);
 
 	uint32_t target_address = (instr & 0x3FFFFFF) << 2;
 
@@ -52,7 +52,7 @@ void JIT::EmitBEQ(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	int32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
 	
-	// printf("beq %s, %s, 0x%08x (%x)\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
+	printf("beq %s, %s, 0x%08x (%x)\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -73,7 +73,7 @@ void JIT::EmitBNE(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rs = (instr >> 21) & 0x1F;
 	uint32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
 
-	// printf("bne %s, %s, 0x%08x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_);
+	printf("bne %s, %s, 0x%08x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -95,7 +95,7 @@ void JIT::EmitBLEZ(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	int32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
 	
-	// printf("blez %s, 0x%08x (%x)\n", EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
+	printf("blez %s, 0x%08x (%x)\n", EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue imm = IRValue(IRValue::Imm);
@@ -105,6 +105,7 @@ void JIT::EmitBLEZ(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	i = IRInstruction::Build({dest, imm}, IRInstrs::BranchRegImm);
 	i.b_type = IRInstruction::BranchType::LE;
+	i.is_likely = false;
 
 	cur_block->ir.push_back(i);
 }
@@ -115,7 +116,7 @@ void JIT::EmitBGTZ(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	int32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
 	
-	// printf("bgtz %s, 0x%08x (%x)\n", EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
+	printf("bgtz %s, 0x%08x (%x)\n", EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue imm = IRValue(IRValue::Imm);
@@ -125,6 +126,7 @@ void JIT::EmitBGTZ(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	i = IRInstruction::Build({dest, imm}, IRInstrs::BranchRegImm);
 	i.b_type = IRInstruction::BranchType::GT;
+	i.is_likely = false;
 
 	cur_block->ir.push_back(i);
 }
@@ -134,7 +136,7 @@ void JIT::EmitADDIU(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("addiu %s, %s, %d\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), (int32_t)(int16_t)(instr & 0xffff));
+	printf("addiu %s, %s, %d\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), (int32_t)(int16_t)(instr & 0xffff));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -154,7 +156,7 @@ void JIT::EmitSLTI(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 	
-	// printf("slti %s, %s, 0x%02x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), (int32_t)(int16_t)(instr & 0xffff));
+	printf("slti %s, %s, 0x%02x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), (int32_t)(int16_t)(instr & 0xffff));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -175,7 +177,7 @@ void JIT::EmitSLTIU(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rs = (instr >> 21) & 0x1F;
 	uint16_t i_ = instr & 0xffff;
 	
-	// printf("sltiu %s, %s, 0x%04x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), i_);
+	printf("sltiu %s, %s, 0x%04x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), i_);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -196,7 +198,7 @@ void JIT::EmitANDI(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("andi %s, %s, 0x%04x (0x%08x)\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), instr & 0xffff, EmotionEngine::state.regs[rs].u32[0]);
+	printf("andi %s, %s, 0x%04x (0x%08x)\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), instr & 0xffff, EmotionEngine::state.regs[rs].u32[0]);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -215,7 +217,7 @@ void JIT::EmitORI(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("ori %s, %s, 0x%04x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), instr & 0xffff);
+	printf("ori %s, %s, 0x%04x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), instr & 0xffff);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -234,7 +236,7 @@ void JIT::EmitXORI(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("xori %s, %s, 0x%04x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), instr & 0xffff);
+	printf("xori %s, %s, 0x%04x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), instr & 0xffff);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -252,7 +254,7 @@ void JIT::EmitLUI(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	int rt = (instr >> 16) & 0x1F;
 
-	// printf("lui %s, 0x%04x\n", EmotionEngine::Reg(rt), instr & 0xffff);
+	printf("lui %s, 0x%04x\n", EmotionEngine::Reg(rt), instr & 0xffff);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue imm = IRValue(IRValue::Imm);
@@ -281,10 +283,30 @@ void JIT::EmitCOP0(uint32_t instr, EE_JIT::IRInstruction &i)
 		break;
 	}
 	case 0x10:
-		// printf("tlbwi\n");
+	{
+		uint8_t opcode = (instr & 0x3F);
+
+		switch (opcode)
+		{
+		case 0x01:
+		case 0x02:
+			break;
+		case 0x18:
+			EmitERET(instr, i);
+			break;
+		case 0x39:
+			i = IRInstruction::Build({}, IRInstrs::DI);
+			cur_block->ir.push_back(i);
+			break;
+		default:
+			printf("[emu/CPU]: Cannot emit unknown cop0 TLB instruction 0x%02x\n", opcode);
+			exit(1);
+		}
+
 		break;
+	}
 	default:
-		// printf("[emu/CPU]: Cannot emit unknown cop0 instruction 0x%02x\n", op);
+		printf("[emu/CPU]: Cannot emit unknown cop0 instruction 0x%02x\n", op);
 		exit(1);
 	}
 }
@@ -295,7 +317,7 @@ void JIT::EmitBEQL(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rs = (instr >> 21) & 0x1F;
 	int32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
 
-	// printf("beql %s, %s, 0x%08x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_);
+	printf("beql %s, %s, 0x%08x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -318,7 +340,7 @@ void JIT::EmitBNEL(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rs = (instr >> 21) & 0x1F;
 	uint32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
 
-	// printf("bnel %s, %s, 0x%08x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_);
+	printf("bnel %s, %s, 0x%08x\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -340,7 +362,7 @@ void JIT::EmitDADDIU(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("daddiu %s, %s, %d\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), (int32_t)(int16_t)(instr & 0xffff));
+	printf("daddiu %s, %s, %d\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs), (int32_t)(int16_t)(instr & 0xffff));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -361,7 +383,7 @@ void JIT::EmitLDL(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 
-	// printf("ldl %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("ldl %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -383,7 +405,7 @@ void JIT::EmitLDR(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 
-	// printf("ldr %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("ldr %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -405,7 +427,7 @@ void JIT::EmitLQ(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 
-	// printf("lq %s, %d(%s) (0x%08x)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base), EmotionEngine::state.regs[_base].u32[0] + _offset);
+	printf("lq %s, %d(%s) (0x%08x)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base), EmotionEngine::state.regs[_base].u32[0] + _offset);
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -428,7 +450,7 @@ void JIT::EmitSQ(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 	
-	// printf("sq %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("sq %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -450,7 +472,7 @@ void JIT::EmitLB(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 
-	// printf("lb %s, %d(%s) (0x%08x)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base), EmotionEngine::state.regs[_base].u32[0] + _offset);
+	printf("lb %s, %d(%s) (0x%08x)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base), EmotionEngine::state.regs[_base].u32[0] + _offset);
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -473,7 +495,7 @@ void JIT::EmitLH(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 
-	// printf("lh %s, %d(%s) (0x%08x)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base), EmotionEngine::state.regs[_base].u32[0] + _offset);
+	printf("lh %s, %d(%s) (0x%08x)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base), EmotionEngine::state.regs[_base].u32[0] + _offset);
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -496,6 +518,8 @@ void JIT::EmitLW(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 
+	printf("lw %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
 	IRValue offset = IRValue(IRValue::Imm);
@@ -517,7 +541,7 @@ void JIT::EmitLBU(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 
-	// printf("lbu %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("lbu %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -540,7 +564,7 @@ void JIT::EmitLHU(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 
-	// printf("lhu %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("lhu %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -563,7 +587,7 @@ void JIT::EmitLWU(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 
-	// printf("lwu %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("lwu %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -586,7 +610,7 @@ void JIT::EmitSB(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 	
-	// printf("sb %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("sb %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -608,7 +632,7 @@ void JIT::EmitSH(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 	
-	// printf("sh %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("sh %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -630,7 +654,7 @@ void JIT::EmitSW(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 	
-	// printf("sw %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("sw %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -653,7 +677,7 @@ void JIT::EmitSDL(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 	
-	// printf("sdl %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("sdl %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -675,7 +699,7 @@ void JIT::EmitSDR(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 	
-	// printf("sdr %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("sdr %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -697,7 +721,7 @@ void JIT::EmitLD(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 	
-	// printf("ld %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("ld %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -720,7 +744,7 @@ void JIT::EmitSWC1(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 
-	// printf("swc1 %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("swc1 %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Float);
@@ -742,7 +766,7 @@ void JIT::EmitSD(uint32_t instr, EE_JIT::IRInstruction &i)
 	int _base = (instr >> 21) & 0x1F;
 	int32_t _offset = (int16_t)(instr & 0xffff);
 	
-	// printf("sd %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
+	printf("sd %s, %d(%s)\n", EmotionEngine::Reg(_rt), _offset, EmotionEngine::Reg(_base));
 
 	IRValue base = IRValue(IRValue::Reg);
 	IRValue rt = IRValue(IRValue::Reg);
@@ -764,7 +788,7 @@ void JIT::EmitSLL(uint32_t instr, EE_JIT::IRInstruction& i)
 	int rt = (instr >> 16) & 0x1F;
 	int sa = (instr >> 6) & 0x1F;
 
-	// printf("sll %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+	printf("sll %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -787,7 +811,7 @@ void JIT::EmitSRL(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int sa = (instr >> 6) & 0x1F;
 
-	// printf("srl %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+	printf("srl %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -810,7 +834,7 @@ void JIT::EmitSRA(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int sa = (instr >> 6) & 0x1F;
 
-	// printf("sra %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+	printf("sra %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -833,7 +857,7 @@ void JIT::EmitSLLV(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("sllv %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+	printf("sllv %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -856,7 +880,7 @@ void JIT::EmitSRLV(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("srav %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+	printf("srav %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -879,7 +903,7 @@ void JIT::EmitSRAV(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("srav %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+	printf("srav %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -900,7 +924,7 @@ void JIT::EmitJR(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("jr %s\n", EmotionEngine::Reg(rs));
+	printf("jr %s\n", EmotionEngine::Reg(rs));
 
 	IRValue src = IRValue(IRValue::Reg);
 	src.SetReg(rs);
@@ -912,10 +936,10 @@ void JIT::EmitJR(uint32_t instr, EE_JIT::IRInstruction &i)
 
 void JIT::EmitJALR(uint32_t instr, EE_JIT::IRInstruction &i)
 {
-	// printf("jalr\n");
-
 	int rs = (instr >> 21) & 0x1F;
 	int rd = (instr >> 11) & 0x1F;
+	
+	printf("jalr %s,%s\n", EmotionEngine::Reg(rs), EmotionEngine::Reg(rd));
 
 	IRValue src = IRValue(IRValue::Reg);
 	IRValue link = IRValue(IRValue::Reg);
@@ -935,7 +959,7 @@ void JIT::EmitMOVZ(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("movz %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+	printf("movz %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src1 = IRValue(IRValue::Reg);
@@ -957,7 +981,7 @@ void JIT::EmitMOVN(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("movn %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+	printf("movn %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src1 = IRValue(IRValue::Reg);
@@ -973,9 +997,15 @@ void JIT::EmitMOVN(uint32_t instr, EE_JIT::IRInstruction &i)
 	cur_block->ir.push_back(i);
 }
 
+void JIT::EmitSyscall(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	i = IRInstruction::Build({}, IRInstrs::SYSCALL);
+	cur_block->ir.push_back(i);
+}
+
 void JIT::EmitBreak(uint32_t instr, EE_JIT::IRInstruction &i)
 {
-	// printf("break\n");
+	printf("break\n");
 
 	i = IRInstruction::Build({}, IRInstrs::UhOh);
 	cur_block->ir.push_back(i);
@@ -985,7 +1015,7 @@ void JIT::EmitMFHI(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	int rd = (instr >> 11) & 0x1F;
 
-	// printf("mfhi %s\n", EmotionEngine::Reg(rd));
+	printf("mfhi %s\n", EmotionEngine::Reg(rd));
 
 	IRValue reg = IRValue(IRValue::Reg);
 	reg.SetReg(rd);
@@ -998,7 +1028,7 @@ void JIT::EmitMFLO(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	int rd = (instr >> 11) & 0x1F;
 
-	// printf("mflo %s\n", EmotionEngine::Reg(rd));
+	printf("mflo %s\n", EmotionEngine::Reg(rd));
 
 	IRValue reg = IRValue(IRValue::Reg);
 	reg.SetReg(rd);
@@ -1015,7 +1045,7 @@ void JIT::EmitDSLLV(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("dsllv %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+	printf("dsllv %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -1038,7 +1068,7 @@ void JIT::EmitDSRAV(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("dsrav %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+	printf("dsrav %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -1061,7 +1091,7 @@ void JIT::EmitMULT(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("mult %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+	printf("mult %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src1 = IRValue(IRValue::Reg);
@@ -1083,7 +1113,7 @@ void JIT::EmitDIV(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("div %s, %s\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+	printf("div %s, %s\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
 
 	IRValue src1 = IRValue(IRValue::Reg);
 	IRValue src2 = IRValue(IRValue::Reg);
@@ -1103,7 +1133,7 @@ void JIT::EmitDIVU(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("divu %s, %s\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+	printf("divu %s, %s\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
 
 	IRValue src1 = IRValue(IRValue::Reg);
 	IRValue src2 = IRValue(IRValue::Reg);
@@ -1124,7 +1154,7 @@ void JIT::EmitADDU(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("addu %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+	printf("addu %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -1144,7 +1174,7 @@ void JIT::EmitSUBU(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("subu %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+	printf("subu %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -1164,7 +1194,7 @@ void JIT::EmitAND(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("and %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+	printf("and %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -1184,7 +1214,7 @@ void JIT::EmitOR(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("or %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+	printf("or %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -1204,7 +1234,7 @@ void JIT::EmitNOR(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("nor %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+	printf("nor %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -1224,7 +1254,7 @@ void JIT::EmitSLT(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("slt %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+	printf("slt %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -1245,7 +1275,7 @@ void JIT::EmitSLTU(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("sltu %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
+	printf("sltu %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue source = IRValue(IRValue::Reg);
@@ -1266,7 +1296,7 @@ void JIT::EmitDADDU(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("daddu %s, %s, %s (0x%08lx, 0x%08lx)\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt), EmotionEngine::state.regs[rs].u64[0], EmotionEngine::state.regs[rt].u64[0]);
+	printf("daddu %s, %s, %s (0x%08lx, 0x%08lx)\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rs), EmotionEngine::Reg(rt), EmotionEngine::state.regs[rs].u64[0], EmotionEngine::state.regs[rt].u64[0]);
 
 	IRValue src1 = IRValue(IRValue::Reg);
 	IRValue src2 = IRValue(IRValue::Reg);
@@ -1288,7 +1318,7 @@ void JIT::EmitDSLL(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int sa = (instr >> 6) & 0x1F;
 
-	// printf("dsll %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+	printf("dsll %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -1311,7 +1341,7 @@ void JIT::EmitDSRL(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int sa = (instr >> 6) & 0x1F;
 
-	// printf("dsrl %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+	printf("dsrl %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -1334,7 +1364,7 @@ void JIT::EmitDSLL32(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int sa = (instr >> 6) & 0x1F;
 
-	// printf("dsll32 %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+	printf("dsll32 %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -1357,7 +1387,7 @@ void JIT::EmitDSRL32(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int sa = (instr >> 6) & 0x1F;
 
-	// printf("dsrl32 %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+	printf("dsrl32 %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -1380,7 +1410,7 @@ void JIT::EmitDSRA32(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int sa = (instr >> 6) & 0x1F;
 
-	// printf("dsra32 %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
+	printf("dsra32 %s, %s, %d\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), sa);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -1403,7 +1433,7 @@ void JIT::EmitBLTZ(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	int32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
 	
-	// printf("bltz %s, 0x%08x (%x)\n", EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
+	printf("bltz %s, 0x%08x (%x)\n", EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue imm = IRValue(IRValue::Imm);
@@ -1413,6 +1443,7 @@ void JIT::EmitBLTZ(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	i = IRInstruction::Build({dest, imm}, IRInstrs::BranchRegImm);
 	i.b_type = IRInstruction::BranchType::LT;
+	i.is_likely = false;
 
 	cur_block->ir.push_back(i);
 }
@@ -1423,7 +1454,7 @@ void JIT::EmitBGEZ(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	int32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
 	
-	// printf("bgez %s, 0x%08x (%x)\n", EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
+	printf("bgez %s, 0x%08x (%x)\n", EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue imm = IRValue(IRValue::Imm);
@@ -1433,6 +1464,28 @@ void JIT::EmitBGEZ(uint32_t instr, EE_JIT::IRInstruction &i)
 
 	i = IRInstruction::Build({dest, imm}, IRInstrs::BranchRegImm);
 	i.b_type = IRInstruction::BranchType::GE;
+	i.is_likely = false;
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitBLTZL(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rs = (instr >> 21) & 0x1F;
+
+	int32_t i_ = (int32_t)(int16_t)(instr & 0xffff) << 2;
+	
+	printf("bltzl %s, 0x%08x (%x)\n", EmotionEngine::Reg(rs), EmotionEngine::state.pc_at + i_, i_);
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue imm = IRValue(IRValue::Imm);
+
+	dest.SetReg(rs);
+	imm.SetImm32((int32_t)(int16_t)(instr & 0xffff) << 2);
+
+	i = IRInstruction::Build({dest, imm}, IRInstrs::BranchRegImm);
+	i.b_type = IRInstruction::BranchType::LT;
+	i.is_likely = true;
 
 	cur_block->ir.push_back(i);
 }
@@ -1441,7 +1494,7 @@ void JIT::EmitMFLO1(uint32_t instr, EE_JIT::IRInstruction &i)
 {
 	int rd = (instr >> 11) & 0x1F;
 
-	// printf("mflo1 %s\n", EmotionEngine::Reg(rd));
+	printf("mflo1 %s\n", EmotionEngine::Reg(rd));
 
 	IRValue reg = IRValue(IRValue::Reg);
 	reg.SetReg(rd);
@@ -1458,7 +1511,7 @@ void JIT::EmitMULT1(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("mult1 %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+	printf("mult1 %s, %s, %s\n", EmotionEngine::Reg(rd), EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src1 = IRValue(IRValue::Reg);
@@ -1480,7 +1533,7 @@ void JIT::EmitDIVU1(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rt = (instr >> 16) & 0x1F;
 	int rs = (instr >> 21) & 0x1F;
 
-	// printf("divu1 %s, %s\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
+	printf("divu1 %s, %s\n", EmotionEngine::Reg(rt), EmotionEngine::Reg(rs));
 
 	IRValue src1 = IRValue(IRValue::Reg);
 	IRValue src2 = IRValue(IRValue::Reg);
@@ -1514,12 +1567,31 @@ void JIT::EmitPOR(uint32_t instr, EE_JIT::IRInstruction &i)
 	cur_block->ir.push_back(i);
 }
 
+void JIT::EmitPADDUW(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	int rd = (instr >> 11) & 0x1F;
+	int rt = (instr >> 16) & 0x1F;
+	int rs = (instr >> 21) & 0x1F;
+
+	IRValue dest = IRValue(IRValue::Reg);
+	IRValue src1 = IRValue(IRValue::Reg);
+	IRValue src2 = IRValue(IRValue::Reg);
+
+	dest.SetReg(rd);
+	src1.SetReg(rt);
+	src2.SetReg(rs);
+
+	i = IRInstruction::Build({dest, src1, src2}, IRInstrs::PADDUSW);
+
+	cur_block->ir.push_back(i);
+}
+
 void JIT::EmitMFC0(uint32_t instr, EE_JIT::IRInstruction& i)
 {
 	int rd = (instr >> 11) & 0x1F;
 	int rt = (instr >> 16) & 0x1F;
 
-	// printf("mfc0 %s, r%d (0x%08x)\n", EmotionEngine::Reg(rt), rd, EmotionEngine::state.cop0_regs[rd]);
+	printf("mfc0 %s, r%d (0x%08x)\n", EmotionEngine::Reg(rt), rd, EmotionEngine::state.cop0_regs[rd]);
 
 	IRValue dest = IRValue(IRValue::Reg);
 	IRValue src = IRValue(IRValue::Cop0Reg);
@@ -1537,7 +1609,7 @@ void JIT::EmitMTC0(uint32_t instr, EE_JIT::IRInstruction &i)
 	int rd = (instr >> 11) & 0x1F;
 	int rt = (instr >> 16) & 0x1F;
 
-	// printf("mtc0 %s, r%d\n", EmotionEngine::Reg(rt), rd);
+	printf("mtc0 %s, r%d\n", EmotionEngine::Reg(rt), rd);
 
 	IRValue dest = IRValue(IRValue::Cop0Reg);
 	IRValue src = IRValue(IRValue::Reg);
@@ -1546,6 +1618,15 @@ void JIT::EmitMTC0(uint32_t instr, EE_JIT::IRInstruction &i)
 	src.SetReg(rt);
 	
 	i = IRInstruction::Build({dest, src}, IRInstrs::MOV);
+
+	cur_block->ir.push_back(i);
+}
+
+void JIT::EmitERET(uint32_t instr, EE_JIT::IRInstruction &i)
+{
+	printf("ERET: Returning to 0x%08x\n", EmotionEngine::state.cop0_regs[14]);
+
+	i = IRInstruction::Build({}, IRInstrs::ERET);
 
 	cur_block->ir.push_back(i);
 }
@@ -1565,7 +1646,7 @@ void JIT::EmitIR(uint32_t instr)
 
 	if (instr == 0)
 	{
-		// printf("nop\n");
+		printf("nop\n");
 		current_instruction.instr = NOP;
 		cur_block->ir.push_back(current_instruction);
 		return;
@@ -1610,11 +1691,14 @@ void JIT::EmitIR(uint32_t instr)
 		case 0x0B:
 			EmitMOVN(instr, current_instruction);
 			break;
+		case 0x0C:
+			EmitSyscall(instr, current_instruction);
+			break;
 		case 0x0D:
 			EmitBreak(instr, current_instruction);
 			break;
 		case 0x0F:
-			// printf("sync\n");
+			printf("sync\n");
 			break;
 		case 0x10:
 			EmitMFHI(instr, current_instruction);
@@ -1694,6 +1778,9 @@ void JIT::EmitIR(uint32_t instr)
 			break;
 		case 0x01:
 			EmitBGEZ(instr, current_instruction);
+			break;
+		case 0x02:
+			EmitBLTZL(instr, current_instruction);
 			break;
 		default:
 			printf("Unknown regimm opcode 0x%02x\n", opcode);
@@ -1823,12 +1910,15 @@ void JIT::EmitIR(uint32_t instr)
 			break;
 		case 0x28:
 		{
-			opcode = (instr >> 5) & 0x1F;
+			opcode = (instr >> 6) & 0x1F;
 
 			switch (opcode)
 			{
+			case 0x10:
+				EmitPADDUW(instr, current_instruction);
+				break;
 			default:
-				printf("[emu/CPU]: Cannot emit unknown mmi1 instruction 0x%02x\n", opcode);
+				printf("[emu/CPU]: Cannot emit unknown mmi1 instruction 0x%02x (0x%08x)\n", opcode, instr);
 				delete cur_block;
 				exit(1);
 			}
@@ -1897,7 +1987,7 @@ void JIT::EmitIR(uint32_t instr)
 		EmitSDR(instr, current_instruction);
 		break;
 	case 0x2f:
-		// printf("cache\n");
+		printf("cache\n");
 		break;
 	case 0x37:
 		EmitLD(instr, current_instruction);
@@ -1917,7 +2007,8 @@ void JIT::EmitIR(uint32_t instr)
 
 void JIT::EmitPrequel(uint32_t guest_start)
 {
-	// printf("---------------------\n");
+	printf("---------------------\n");
+	printf("0x%08x:\n", EmotionEngine::state.pc);
 	cur_block = new Block;
 	cur_block->guest_addr = guest_start;
 	cur_block->entry = (uint8_t*)emit->GetFreeBase();
@@ -1925,7 +2016,7 @@ void JIT::EmitPrequel(uint32_t guest_start)
 
 JIT::EntryFunc JIT::EmitDone(size_t cycles_taken)
 {
-	// printf("Done.\n");
+	printf("Done.\n");
 
 	IRValue cycles = IRValue(IRValue::Imm);
 	cycles.SetImm32Unsigned(cycles_taken);
@@ -2034,6 +2125,25 @@ bool IsBranch(uint32_t instr)
 	case 0x14:
 	case 0x15:
 		return true;
+	case 0x10:
+		opcode = (instr >> 21) & 0x3F;
+		switch (opcode)
+		{			
+		case 0x10:
+		{
+			opcode = instr & 0x3F;
+			switch (opcode)
+			{
+			case 0x18:
+				return true;
+			default:
+				return false;
+			}
+		}
+		default:
+			return false;
+		}
+		break;
 	default:
 		return false;
 	}
@@ -2086,7 +2196,7 @@ int Clock()
 
 // 			state.pc_at = pc - 4;
 
-// 			// printf("0x%08x (0x%08x): ", pc - 4, instr);
+// 			printf("0x%08x (0x%08x): ", pc - 4, instr);
 
 // 			jit.EmitIR(instr);
 
@@ -2111,7 +2221,7 @@ int Clock()
 
 // 		if (!b)
 // 		{
-// 		 	// printf("Something has gone seriously wrong!\n");
+// 		 	printf("Something has gone seriously wrong!\n");
 // 		 	exit(1);
 // 		}
 
@@ -2132,6 +2242,7 @@ void Dump()
 	for (int i = 0; i < 32; i++)
 		printf("%s\t->\t0x%lx%016lx\n", Reg(i), state.regs[i].u64[1], state.regs[i].u64[0]);
 	printf("pc\t->\t0x%08x\n", state.pc);
+	printf("pc_at\t->\t0x%08x\n", state.pc_at);
 	printf("hi\t->\t0x%08x\n", state.hi);
 	printf("lo\t->\t0x%08x\n", state.lo);
 	printf("hi1\t->\t0x%08x\n", state.hi1);
@@ -2150,6 +2261,86 @@ void MarkDirty(uint32_t address, uint32_t size)
 void EmitPrequel()
 {
 	jit.EmitPrequel(state.pc);
+}
+
+union COP0CAUSE 
+{
+	uint32_t value;
+	struct 
+	{
+		uint32_t : 2;
+		uint32_t excode : 5;	/* Exception Code */
+		uint32_t : 1;
+		uint32_t IP : 8;		/* Interrupt Pending */
+		uint32_t : 12;
+		uint32_t CE : 2;		/* Coprocessor Error */
+		uint32_t BT : 1;		/* Branch Taken */
+		uint32_t BD : 1;		/* Branch Delay */
+	};
+};
+
+union COP0Status
+{
+    uint32_t value;
+    struct
+    {
+        uint32_t ie : 1; /* Interrupt Enable */
+        uint32_t exl : 1; /* Exception Level */
+        uint32_t erl : 1; /* Error Level */
+        uint32_t ksu : 2; /* Kernel/Supervisor/User Mode bits */
+        uint32_t : 5;
+        uint32_t im0 : 1; /* Int[1:0] signals */
+        uint32_t im1 : 1;
+        uint32_t bem : 1; /* Bus Error Mask */
+        uint32_t : 2;
+        uint32_t im7 : 1; /* Internal timer interrupt  */
+        uint32_t eie : 1; /* Enable IE */
+        uint32_t edi : 1; /* EI/DI instruction Enable */
+        uint32_t ch : 1; /* Cache Hit */
+        uint32_t : 3;
+        uint32_t bev : 1; /* Location of TLB refill */
+        uint32_t dev : 1; /* Location of Performance counter */
+        uint32_t : 2;
+        uint32_t fr : 1; /* Additional floating point registers */
+        uint32_t : 1;
+        uint32_t cu : 4; /* Usability of each of the four coprocessors */
+    };
+};
+
+void Exception(uint8_t code)
+{
+	static uint32_t exception_addr[2] = { 0x80000000, 0xBFC00200 };
+
+	COP0CAUSE cause;
+	COP0Status status;
+	status.value = state.cop0_regs[12];
+	cause.value = state.cop0_regs[13];
+
+	cause.excode = code;
+
+	uint32_t vector = 0x180;
+
+	if (!status.exl)
+	{
+		state.cop0_regs[14] = state.next_pc;
+
+		switch (code)
+		{
+		case 0:
+			vector = 0x200;
+			break;
+		default:
+			vector = 0x180;
+			break;
+		}
+
+		status.exl = true;
+	}
+
+	state.next_pc = exception_addr[status.bev] + vector;
+
+	state.cop0_regs[12] = status.value;
+	state.cop0_regs[13] = cause.value;
 }
 
 void CheckCacheFull()

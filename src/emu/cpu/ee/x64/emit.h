@@ -56,6 +56,10 @@ private:
 	void EmitBranchRegImm(IRInstruction i);
 	void EmitUpdateCopCount(IRInstruction i);
 	void EmitPOR(IRInstruction i);
+	void EmitPADDUSW(IRInstruction i);
+	void EmitDI(IRInstruction i);
+	void EmitERET(IRInstruction i);
+	void EmitSyscall(IRInstruction i);
 
 	EE_JIT::JIT::EntryFunc dispatcher_entry;
 public:
