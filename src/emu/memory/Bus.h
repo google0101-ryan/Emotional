@@ -3,12 +3,12 @@
 
 #pragma once
 
-#include <cstdint>
 #include <util/uint128.h>
-
 #include <emu/cpu/iop/dma.h>
 #include <emu/dev/cdvd.h>
 #include <emu/dev/sif.h>
+
+#include <cstdint>
 
 uint32_t Translate(uint32_t addr);
 extern uint8_t* BiosRom;
@@ -41,9 +41,9 @@ T iop_read(uint32_t addr)
 	addr = Translate(addr);
 
 	if (addr >= 0x1fc00000 && addr < 0x20000000)
-		return *(T*)&BiosRom[addr - 0x1fc00000];
+		return *reinterpret_cast<T*>(&BiosRom[addr - 0x1fc00000]);
 	if (addr < 0x200000)
-		return *(T*)&iop_ram[addr];
+		return *reinterpret_cast<T*>(&iop_ram[addr]);
 	if (addr >= 0x1E000000 && addr < 0x1F000000)
 		return 0;
 
@@ -72,6 +72,8 @@ T iop_read(uint32_t addr)
 		return IopDma::ReadDPCR();
 	case 0x1f8010f4:
 		return IopDma::ReadDICR();
+	case 0x1f801070:
+		return I_STAT;
 	case 0x1f801078:
 		return I_CTRL;
 	case 0x1f801570:
@@ -88,6 +90,14 @@ T iop_read(uint32_t addr)
 	case 0x1F801490 ... 0x1F801498:
 	case 0x1F8014A0 ... 0x1F8014A8:
 		return 0;
+
+	case 0x1f801500 ... 0x1f80150C:
+	case 0x1f801510 ... 0x1f80151C:
+	case 0x1f801520 ... 0x1f80152C:
+	case 0x1f801530 ... 0x1f80153C:
+	case 0x1f801540 ... 0x1f80154C:
+	case 0x1f801550 ... 0x1f80155C:
+		return IopDma::ReadNewChannel(addr);
 	}
 
 	printf("[emu/IopBus]: Read from unknown addr 0x%08x\n", addr);
@@ -98,10 +108,10 @@ template<typename T>
 void iop_write(uint32_t addr, T data)
 {
 	addr = Translate(addr);
-	
+
 	if (addr < 0x200000)
 	{
-		*(T*)&iop_ram[addr] = data;
+		*reinterpret_cast<T*>(&iop_ram[addr]) = data;
 		return;
 	}
 
@@ -109,6 +119,9 @@ void iop_write(uint32_t addr, T data)
 	{
 	case 0x1d000010:
 		SIF::WriteSMCOM_IOP(data);
+		return;
+	case 0x1d000020:
+		SIF::WriteMSFLG_IOP(data);
 		return;
 	case 0x1d000030:
 		SIF::WriteSMFLG_IOP(data);
@@ -146,6 +159,9 @@ void iop_write(uint32_t addr, T data)
 		return;
 	case 0x1ffe0144:
 		printf("[emu/IOP]: Scratchpad start 0x%08x\n", data);
+		return;
+	case 0x1f801070:
+		I_STAT &= data;
 		return;
 	case 0x1f801074:
 		I_MASK = data;
@@ -199,4 +215,9 @@ void iop_write(uint32_t addr, T data)
 	exit(1);
 }
 
+inline void TriggerIOPInterrupt(int i_num)
+{
+	I_STAT |= (1 << i_num);
 }
+
+}  // namespace Bus

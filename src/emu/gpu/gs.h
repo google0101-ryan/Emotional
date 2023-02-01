@@ -16,4 +16,4 @@ inline void WriteGSSYNCH1(uint64_t data) {}
 inline void WriteGSSYNCH2(uint64_t data) {}
 inline void WriteGSSYNCV(uint64_t data) {}
 
-}
+}  // namespace GS

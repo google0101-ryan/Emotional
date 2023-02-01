@@ -1,7 +1,11 @@
+// (c) Copyright 2022-2023 Ryan Ilari
+// This code is licensed under MIT license (see LICENSE for details)
+
 #pragma once
 
-#include <cstdint>
 #include <emu/cpu/iop/opcode.h>
+
+#include <cstdint>
 #include <string>
 #include <fstream>
 
@@ -15,10 +19,10 @@ private:
 	bool last_instruction_was_lwl = false;
 	bool last_instruction_was_lwr = false;
 
-    union COP0STAT 
+    union COP0STAT
 	{
 		uint32_t value;
-		struct 
+		struct
 		{
 			uint32_t IEc : 1;		/* Interrupt Enable (current) */
 			uint32_t KUc : 1;		/* Kernel-User Mode (current) */
@@ -40,10 +44,10 @@ private:
 		};
 	};
 
-	union COP0CAUSE 
+	union COP0CAUSE
 	{
 		uint32_t value;
-		struct 
+		struct
 		{
 			uint32_t : 2;
 			uint32_t excode : 5;	/* Exception Code */
@@ -59,7 +63,7 @@ private:
     union COP0
     {
         uint32_t regs[32] = {};
-		struct 
+		struct
 		{
 			uint32_t r0;
 			uint32_t r1;
@@ -167,72 +171,72 @@ private:
         write_back.data = value;
     }
 
-	void op_special(); // 0x00
-    void op_bcond(); // 0x01
-    void op_j(); // 0x02
-    void op_jal(); // 0x03
-    void op_beq(); // 0x04
-    void op_bne(); // 0x05
-    void op_blez(); // 0x06
-    void op_bgtz(); // 0x07
-    void op_addi(); // 0x08
-    void op_addiu(); // 0x09
-    void op_slti(); // 0x0A
-    void op_sltiu(); // 0x0B
-    void op_andi(); // 0x0C
-    void op_ori(); // 0x0D
-	void op_xori(); // 0x0E
-    void op_lui(); // 0x0F
-    void op_cop0(); // 0x10
-    void op_cop2(); // 0x12
-    void op_lb(); // 0x20
-    void op_lh(); // 0x21
-	void op_lwl(); // 0x22
-    void op_lw(); // 0x23
-    void op_lbu(); // 0x24
-    void op_lhu(); // 0x25
-	void op_lwr(); // 0x26
-    void op_sb(); // 0x28
-    void op_sh(); // 0x29
-	void op_swl(); // 0x2A
-    void op_sw(); // 0x2B
-	void op_swr(); // 0x2E
+	void op_special();  // 0x00
+    void op_bcond();  // 0x01
+    void op_j();  // 0x02
+    void op_jal();  // 0x03
+    void op_beq();  // 0x04
+    void op_bne();  // 0x05
+    void op_blez();  // 0x06
+    void op_bgtz();  // 0x07
+    void op_addi();  // 0x08
+    void op_addiu();  // 0x09
+    void op_slti();  // 0x0A
+    void op_sltiu();  // 0x0B
+    void op_andi();  // 0x0C
+    void op_ori();  // 0x0D
+	void op_xori();  // 0x0E
+    void op_lui();  // 0x0F
+    void op_cop0();  // 0x10
+    void op_cop2();  // 0x12
+    void op_lb();  // 0x20
+    void op_lh();  // 0x21
+	void op_lwl();  // 0x22
+    void op_lw();  // 0x23
+    void op_lbu();  // 0x24
+    void op_lhu();  // 0x25
+	void op_lwr();  // 0x26
+    void op_sb();  // 0x28
+    void op_sh();  // 0x29
+	void op_swl();  // 0x2A
+    void op_sw();  // 0x2B
+	void op_swr();  // 0x2E
 
-    // special
+     // special
 
-    void op_sll(); // 0x00
-    void op_srl(); // 0x02
-    void op_sra(); // 0x03
-    void op_sllv(); // 0x04
-    void op_srlv(); // 0x06
-	void op_srav(); // 0x07
-    void op_jr(); // 0x08
-    void op_jalr(); // 0x09
-    void op_syscall(); // 0x0C
-    void op_mfhi(); // 0x10
-    void op_mthi(); // 0x11
-    void op_mflo(); // 0x12
-    void op_mtlo(); // 0x13
-    void op_mult(); // 0x18
-    void op_multu(); // 0x19
-	void op_div(); // 0x1A
-    void op_divu(); // 0x1B
-    void op_add(); // 0x20
-    void op_addu(); // 0x21
-	void op_sub(); // 0x22
-    void op_subu(); // 0x23
-    void op_and(); // 0x24
-    void op_or(); // 0x25
-    void op_xor(); // 0x26
-    void op_nor(); // 0x27
-    void op_slt(); // 0x2A
-    void op_sltu(); // 0x2B
+    void op_sll();  // 0x00
+    void op_srl();  // 0x02
+    void op_sra();  // 0x03
+    void op_sllv();  // 0x04
+    void op_srlv();  // 0x06
+	void op_srav();  // 0x07
+    void op_jr();  // 0x08
+    void op_jalr();  // 0x09
+    void op_syscall();  // 0x0C
+    void op_mfhi();  // 0x10
+    void op_mthi();  // 0x11
+    void op_mflo();  // 0x12
+    void op_mtlo();  // 0x13
+    void op_mult();  // 0x18
+    void op_multu();  // 0x19
+	void op_div();  // 0x1A
+    void op_divu();  // 0x1B
+    void op_add();  // 0x20
+    void op_addu();  // 0x21
+	void op_sub();  // 0x22
+    void op_subu();  // 0x23
+    void op_and();  // 0x24
+    void op_or();  // 0x25
+    void op_xor();  // 0x26
+    void op_nor();  // 0x27
+    void op_slt();  // 0x2A
+    void op_sltu();  // 0x2B
 
-    // cop0
+     // cop0
 
-    void op_mfc0(); // 0x00
-    void op_mtc0(); // 0x04
-	void op_rfe(); // 0x10
+    void op_mfc0();  // 0x00
+    void op_mtc0();  // 0x04
+	void op_rfe();  // 0x10
 
 	void direct_jump();
 	void handle_load_delay();
@@ -245,7 +249,7 @@ private:
 	bool can_disassemble = false;
 	std::ofstream console;
 
-	enum class Exception 
+	enum class Exception
     {
         Interrupt = 0x0,
         ReadError = 0x4,

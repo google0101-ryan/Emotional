@@ -79,11 +79,11 @@ void EE_JIT::Emitter::EmitMovCond(IRInstruction i)
 
 	if (i.mov_cond == IRInstruction::MovCond::N)
 	{
-		cg->jne(end);
+		cg->je(end);
 	}
 	else
 	{
-		cg->je(end);
+		cg->jne(end);
 	}
 
 	cg->mov(ee_src, cg->qword[cg->rbp + src_offset]);
@@ -1629,7 +1629,7 @@ void EE_JIT::Emitter::EnterDispatcher()
 	dispatcher_entry();
 }
 
-const uint8_t *EE_JIT::Emitter::GetFreeBase()
+uint8_t *EE_JIT::Emitter::GetFreeBase()
 {
 	return cg->getCurr();
 }

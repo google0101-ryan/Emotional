@@ -25,7 +25,7 @@ inline char* print_128(uint128_t s)
 
     memset(ret, 0, 512);
 
-    sprintf(ret, "%lx%016lx", s.u64[1], s.u64[0]);
+    sprintf(ret, "%016lx %016lx", s.u64[1], s.u64[0]);
 
     return ret;
 }

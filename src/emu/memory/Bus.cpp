@@ -1,18 +1,21 @@
 // (c) Copyright 2022-2023 Ryan Ilari
 // This code is licensed under MIT license (see LICENSE for details)
 
-#include "Bus.h"
+#include <emu/memory/Bus.h>
+
+#include <emu/cpu/ee/vu.h>
+#include <emu/cpu/ee/vif.h>
+#include <emu/dev/sif.h>
+#include <emu/gpu/gs.h>
+#include <emu/cpu/ee/EmotionEngine.h>
+
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
-#include <emu/cpu/ee/EmotionEngine.h>
+
 #include <emu/gpu/gif.hpp>
-#include <emu/gpu/gs.h>
 #include <emu/cpu/ee/dmac.hpp>
-#include <emu/cpu/ee/vu.h>
-#include <emu/cpu/ee/vif.h>
-#include <emu/dev/sif.h>
 
 uint8_t* BiosRom;
 uint8_t spr[0x4000];
@@ -27,7 +30,7 @@ uint32_t Bus::I_MASK = 0, Bus::I_STAT = 0, Bus::I_CTRL = 0;
 
 uint32_t Translate(uint32_t addr)
 {
-    constexpr uint32_t KUSEG_MASKS[8] = 
+    constexpr uint32_t KUSEG_MASKS[8] =
     {
         /* KUSEG: Don't touch the address, it's fine */
         0xffffffff, 0xfffffff, 0xfffffff, 0xffffffff,
@@ -66,7 +69,7 @@ void Bus::Dump()
 
 	for (int i = 0; i < 0x4000; i++)
 	{
-		dump << (char)spr[i];
+		dump << static_cast<char>(spr[i]);
 	}
 
 	dump.close();
@@ -75,7 +78,7 @@ void Bus::Dump()
 
 	for (int i = 0; i < 0x2000000; i++)
 	{
-		dump << (char)ram[i];
+		dump << static_cast<char>(ram[i]);
 	}
 
 	dump.close();
@@ -84,7 +87,7 @@ void Bus::Dump()
 
 	for (int i = 0; i < 0x200000; i++)
 	{
-		dump << (char)iop_ram[i];
+		dump << static_cast<char>(iop_ram[i]);
 	}
 
 	dump.close();
@@ -95,8 +98,8 @@ uint128_t Bus::Read128(uint32_t addr)
 	addr = Translate(addr);
 
 	if (addr < 0x2000000)
-		return {*(__uint128_t*)&ram[addr]};
-	
+		return {*reinterpret_cast<__uint128_t*>(&ram[addr])};
+
 	printf("Read128 from unknown address 0x%08x\n", addr);
 	exit(1);
 }
@@ -106,12 +109,12 @@ uint64_t Bus::Read64(uint32_t addr)
 	addr = Translate(addr);
 
 	if (addr >= 0x1fc00000 && addr < 0x20000000)
-		return *(uint64_t*)&BiosRom[addr - 0x1fc00000];
+		return *reinterpret_cast<uint64_t*>(&BiosRom[addr - 0x1fc00000]);
 	if (addr >= 0x70000000 && addr < 0x70004000)
-		return *(uint64_t*)&spr[addr - 0x70000000];
+		return *reinterpret_cast<uint64_t*>(&spr[addr - 0x70000000]);
 	if (addr < 0x2000000)
-		return *(uint64_t*)&ram[addr];
-	
+		return *reinterpret_cast<uint64_t*>(&ram[addr]);
+
 	printf("Read64 from unknown address 0x%08x\n", addr);
 	exit(1);
 }
@@ -121,13 +124,13 @@ uint32_t Bus::Read32(uint32_t addr)
 	addr = Translate(addr);
 
 	if (addr >= 0x1fc00000 && addr < 0x20000000)
-		return *(uint32_t*)&BiosRom[addr - 0x1fc00000];
+		return *reinterpret_cast<uint32_t*>(&BiosRom[addr - 0x1fc00000]);
 	if (addr >= 0x70000000 && addr < 0x70004000)
-		return *(uint32_t*)&spr[addr - 0x70000000];
+		return *reinterpret_cast<uint32_t*>(&spr[addr - 0x70000000]);
 	if (addr < 0x2000000)
-		return *(uint32_t*)&ram[addr];
+		return *reinterpret_cast<uint32_t*>(&ram[addr]);
 	if (addr >= 0x1C000000 && addr < 0x1C200000)
-		return *(uint32_t*)&iop_ram[addr - 0x1C000000];
+		return *reinterpret_cast<uint32_t*>(&iop_ram[addr - 0x1C000000]);
 
 	switch (addr)
 	{
@@ -171,6 +174,10 @@ uint32_t Bus::Read32(uint32_t addr)
 	case 0x1000C000:
 	case 0x1000C020:
 		return DMAC::ReadSIF0Channel(addr);
+	case 0x1000C400:
+	case 0x1000C420:
+	case 0x1000C430:
+		return DMAC::ReadSIF1Channel(addr);
 	case 0x1000E000:
 		return DMAC::ReadDCTRL();
 	case 0x1000E010:
@@ -185,10 +192,12 @@ uint32_t Bus::Read32(uint32_t addr)
 		return SIF::ReadMSFLG();
 	case 0x1000F230:
 		return SIF::ReadSMFLG();
+	case 0x1000F520:
+		return DMAC::ReadDENABLE();
 	case 0x10002010:
 		return 0;
 	}
-	
+
 	printf("Read32 from unknown address 0x%08x\n", addr);
 	exit(1);
 }
@@ -196,14 +205,14 @@ uint32_t Bus::Read32(uint32_t addr)
 uint16_t Bus::Read16(uint32_t addr)
 {
 	addr = Translate(addr);
-	
+
 	if (addr >= 0x1fc00000 && addr < 0x20000000)
-		return *(uint16_t*)&BiosRom[addr - 0x1fc00000];
+		return *reinterpret_cast<uint16_t*>(&BiosRom[addr - 0x1fc00000]);
 	if (addr >= 0x70000000 && addr < 0x70004000)
-		return *(uint16_t*)&spr[addr - 0x70000000];
+		return *reinterpret_cast<uint16_t*>(&spr[addr - 0x70000000]);
 	if (addr < 0x2000000)
-		return *(uint16_t*)&ram[addr];
-	
+		return *reinterpret_cast<uint16_t*>(&ram[addr]);
+
 	switch (addr)
 	{
 	case 0x1f803800:
@@ -218,6 +227,11 @@ uint8_t Bus::Read8(uint32_t addr)
 {
 	addr = Translate(addr);
 
+	if (addr == 0x1e104)
+	{
+		printf("Reading from transfers_queued\n");
+	}
+
 
 	if (addr >= 0x1fc00000 && addr < 0x20000000)
 		return BiosRom[addr - 0x1fc00000];
@@ -225,31 +239,31 @@ uint8_t Bus::Read8(uint32_t addr)
 		return spr[addr - 0x70000000];
 	if (addr < 0x2000000)
 		return ram[addr];
-	
+
 	switch (addr)
 	{
 	case 0x1f803204:
 		return 0;
 	}
-	
+
 	printf("Read from unknown address 0x%08x\n", addr);
 	exit(1);
 }
 
 void Bus::Write128(uint32_t addr, uint128_t data)
 {
-	addr = Translate(addr);
-
 	EmotionEngine::MarkDirty(addr, sizeof(data));
+
+	addr = Translate(addr);
 
 	if (addr < 0x2000000)
 	{
-		*(__uint128_t*)&ram[addr] = data.u128;
+		*reinterpret_cast<__uint128_t*>(&ram[addr]) = data.u128;
 		return;
 	}
 	if (addr >= 0x70000000 && addr < 0x70004000)
 	{
-		*(__uint128_t*)&spr[addr - 0x70000000] = data.u128;
+		*reinterpret_cast<__uint128_t*>(&spr[addr - 0x70000000]) = data.u128;
 		return;
 	}
 
@@ -284,24 +298,25 @@ void Bus::Write128(uint32_t addr, uint128_t data)
 		return;
 	}
 
-	printf("Write128 0x%lx%016lx to unknown address 0x%08x\n", data.u64[1], data.u64[0], addr);
+	printf("Write128 0x%lx%016lx to unknown address 0x%08x\n",
+			data.u64[1], data.u64[0], addr);
 	exit(1);
 }
 
 void Bus::Write64(uint32_t addr, uint64_t data)
 {
-	addr = Translate(addr);
-
 	EmotionEngine::MarkDirty(addr, sizeof(data));
+
+	addr = Translate(addr);
 
 	if (addr >= 0x70000000 && addr < 0x70004000)
 	{
-		*(uint64_t*)&spr[addr - 0x70000000] = data;
+		*reinterpret_cast<uint64_t*>(&spr[addr - 0x70000000]) = data;
 		return;
 	}
 	if (addr < 0x2000000)
 	{
-		*(uint64_t*)&ram[addr] = data;
+		*reinterpret_cast<uint64_t*>(&ram[addr]) = data;
 		return;
 	}
 	if (addr >= 0x11008000 && addr < 0x1100C000)
@@ -341,29 +356,34 @@ void Bus::Write64(uint32_t addr, uint64_t data)
 
 void Bus::Write32(uint32_t addr, uint32_t data)
 {
+	EmotionEngine::MarkDirty(addr, sizeof(data));
+
+	if (addr == 0x8001e140)
+	{
+		printf("Writing 0x%08x to GIFTAG stuff\n", data);
+	}
+
 	addr = Translate(addr);
 
-	EmotionEngine::MarkDirty(addr, sizeof(data));
-	
 	if (addr >= 0x70000000 && addr < 0x70004000)
 	{
-		*(uint32_t*)&spr[addr - 0x70000000] = data;
+		*reinterpret_cast<uint32_t*>(&spr[addr - 0x70000000]) = data;
 		return;
 	}
 	if (addr < 0x2000000)
 	{
-		*(uint32_t*)&ram[addr] = data;
+		*reinterpret_cast<uint32_t*>(&ram[addr]) = data;
 		return;
 	}
 	if (addr >= 0x1C000000 && addr < 0x1C200000)
 	{
-		*(uint32_t*)&iop_ram[addr-0x1C000000] = data;
+		*reinterpret_cast<uint32_t*>(&iop_ram[addr-0x1C000000]) = data;
 		return;
 	}
 
 	switch (addr)
 	{
-	case 0x1000f100: // Some weird RDRAM stuff
+	case 0x1000f100:  // Some weird RDRAM stuff
 	case 0x1000f120:
 	case 0x1000f140:
 	case 0x1000f150:
@@ -382,7 +402,7 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 	case 0x1000f010:
 		INTC_MASK = data;
 		return;
-	case 0x1000f500: // EE TLB enable?
+	case 0x1000f500:  // EE TLB enable?
 		return;
 	case 0x1000f430:
 	{
@@ -391,7 +411,7 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 
 		if (SA == 0x21 && SBC == 0x1 && ((MCH_DRD >> 7) & 1) == 0)
 			rdram_sdevid = 0;
-		
+
 		MCH_RICM = data & ~0x80000000;
 		return;
 	}
@@ -547,6 +567,9 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 	case 0x1000F260:
 		SIF::WriteBD6_EE(data);
 		return;
+	case 0x1000F590:
+		DMAC::WriteDENABLE(data);
+		return;
 	}
 
 	printf("Write32 0x%08x to unknown address 0x%08x\n", data, addr);
@@ -555,18 +578,18 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 
 void Bus::Write16(uint32_t addr, uint16_t data)
 {
+	EmotionEngine::MarkDirty(addr, sizeof(data));
+
 	addr = Translate(addr);
 
-	EmotionEngine::MarkDirty(addr, sizeof(data));
-	
 	if (addr >= 0x70000000 && addr < 0x70004000)
 	{
-		*(uint16_t*)&spr[addr - 0x70000000] = data;
+		*reinterpret_cast<uint16_t*>(&spr[addr - 0x70000000]) = data;
 		return;
 	}
 	if (addr < 0x2000000)
 	{
-		*(uint16_t*)&ram[addr] = data;
+		*reinterpret_cast<uint16_t*>(&ram[addr]) = data;
 		return;
 	}
 
@@ -579,9 +602,14 @@ void Bus::Write16(uint32_t addr, uint16_t data)
 
 void Bus::Write8(uint32_t addr, uint8_t data)
 {
-	addr = Translate(addr);
-
 	EmotionEngine::MarkDirty(addr, sizeof(data));
+
+	if (addr == 0x8001e104)
+	{
+		printf("Writing 0x%02x to transfers_queued\n", data);
+	}
+
+	addr = Translate(addr);
 
 	if (addr >= 0x70000000 && addr < 0x70004000)
 	{
@@ -597,7 +625,7 @@ void Bus::Write8(uint32_t addr, uint8_t data)
 	switch (addr)
 	{
 	case 0x1000f180:
-		console << (char)data;
+		console << static_cast<char>(data);
 		console.flush();
 		return;
 	}

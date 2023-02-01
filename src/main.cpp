@@ -1,4 +1,4 @@
-// (c) Copyright 2022 Ryan Ilari
+// (c) Copyright 2022-2023 Ryan Ilari
 // This code is licensed under MIT license (see LICENSE for details)
 
 #include <app/Application.h>
@@ -9,7 +9,8 @@ int main(int argc, char** argv)
 {
     if (!Application::Init(argc, argv))
     {
-        printf("[src/Main]: %s: Error initializing main app class\n", __FUNCTION__);
+        printf("[src/Main]: %s: Error initializing main app class\n",
+				__FUNCTION__);
         exit(1);
     }
 

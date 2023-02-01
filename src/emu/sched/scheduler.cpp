@@ -1,9 +1,14 @@
-#include "scheduler.h"
+// (c) Copyright 2022-2023 Ryan Ilari
+// This code is licensed under MIT license (see LICENSE for details)
+
+#include <emu/sched/scheduler.h>
+
+#include <emu/cpu/iop/cpu.h>
+
 #include <vector>
 #include <algorithm>
 #include <limits>
 #include <cinttypes>
-#include <emu/cpu/iop/cpu.h>
 
 namespace Scheduler
 {
@@ -15,10 +20,6 @@ std::vector<Event> event_queue;
 void InitScheduler()
 {
 	std::make_heap(event_queue.begin(), event_queue.end());
-	// Event infinite_event;
-	// infinite_event.cycles_from_now = std::numeric_limits<uintmax_t>::max() - global_cycles;
-	// infinite_event.name = "Infinite Event (Unreachable)";
-	// ScheduleEvent(infinite_event);
 }
 
 bool CompareEvents(const Event& a, const Event& b)
@@ -29,7 +30,7 @@ bool CompareEvents(const Event& a, const Event& b)
 void ScheduleEvent(Event event)
 {
 	event.cycles_from_now += global_cycles;
-	if (event.cycles_from_now < global_cycles) // Overflow detected
+	if (event.cycles_from_now < global_cycles)  // Overflow detected
 	{
 		printf("[emu/Sched]: Overflow found\n");
 		for (auto& e : event_queue)
@@ -60,9 +61,6 @@ void CheckScheduler(int cycles)
 		event_queue.pop_back();
 		e.func();
 	}
-
-	// if (!event_queue.empty())
-	// 	printf("[emu/Sched]: Next event is in %d cycles\n", event_queue.front().cycles_from_now - global_cycles);
 }
 
-}
+}  // namespace Scheduler

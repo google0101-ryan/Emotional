@@ -1,7 +1,11 @@
+// (c) Copyright 2022-2023 Ryan Ilari
+// This code is licensed under MIT license (see LICENSE for details)
+
 #include <emu/memory/Bus.h>
 #include <app/Application.h>
+#include <emu/cpu/iop/cpu.h>
+
 #include <cstring>
-#include "cpu.h"
 
 uint32_t exception_addr[2] = { 0x80000080, 0xBFC00180 };
 
@@ -217,7 +221,7 @@ void CPU::Dump()
 
 bool CPU::IntPending()
 {	
-	bool pending = false;
+	bool pending = Bus::I_CTRL && (Bus::I_STAT & Bus::I_MASK);
 	Cop0.cause.IP = (Cop0.cause.IP & ~0x4) | (pending << 2);
 
 	bool enabled = Cop0.status.IEc && (Cop0.status.Im & Cop0.cause.IP);

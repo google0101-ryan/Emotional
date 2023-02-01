@@ -14,6 +14,8 @@ void WriteDICR2(uint32_t data);
 void WriteChannel(uint32_t addr, uint32_t data);
 void WriteNewChannel(uint32_t addr, uint32_t data);
 
+uint32_t ReadNewChannel(uint32_t addr);
+
 uint32_t ReadDMACEN();
 uint32_t ReadDICR2();
 uint32_t ReadDICR();

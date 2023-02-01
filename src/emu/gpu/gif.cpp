@@ -1,11 +1,12 @@
 // (c) Copyright 2022-2023 Ryan Ilari
 // This code is licensed under MIT license (see LICENSE for details)
 
-#include "gif.hpp"
+#include <emu/gpu/gif.hpp>
+
+#include <emu/sched/scheduler.h>
 
 #include <cstdio>
 #include <queue>
-#include <emu/sched/scheduler.h>
 
 namespace GIF
 {
@@ -76,8 +77,10 @@ void ProcessGIFData()
 	{
 		tag.value = fifo.front().u128;
 		data_count = tag.nloop;
-		printf("[emu/GIF]: Received GIFTag: nloop: 0%04x, eop: %d, prim_en: %d, prim_data: 0x%04x, fmt: %d, nregs: %d, regs: 0x%08lx\n", 
-											tag.nloop, tag.eop, tag.prim_en, tag.prim_data, tag.fmt, tag.nregs, tag.reg);
+		printf("[emu/GIF]: Received GIFTag: nloop: 0%04x, eop: %d, prim_en: %d, prim_data: 0x%04x, fmt: %d, nregs: %d, regs: 0x%08lx\n",
+				tag.nloop, tag.eop,
+				tag.prim_en, tag.prim_data, 
+				tag.fmt, tag.nregs, tag.reg);
 	}
 	else
 	{
@@ -124,12 +127,13 @@ uint32_t ReadStat()
 
 void WriteFIFO(uint128_t data)
 {
-	printf("[emu/GIF]: Adding 0x%lx%016lx to GIF FIFO\n", data.u64[1], data.u64[0]);
+	printf("[emu/GIF]: Adding 0x%lx%016lx to GIF FIFO\n",
+			data.u64[1], data.u64[0]);
 	if (fifo.size() < 16)
 	{
 		fifo.push(data);
 	}
-	
+
 	if (!event_scheduled)
 	{
 		Scheduler::Event event;
@@ -142,4 +146,5 @@ void WriteFIFO(uint128_t data)
 		Scheduler::ScheduleEvent(event);
 	}
 }
-}
+
+}  // namespace GIF

@@ -1,17 +1,45 @@
 // (c) Copyright 2022-2023 Ryan Ilari
 // This code is licensed under MIT license (see LICENSE for details)
 
-#include "dmac.hpp"
+#include <emu/cpu/ee/dmac.hpp>
 
-#include <cstdio>
-#include <cstdlib>
-#include <cassert>
 #include <emu/memory/Bus.h>
 #include <emu/sched/scheduler.h>
 #include <emu/dev/sif.h>
 
+#include <cstdio>
+#include <cstdlib>
+#include <cassert>
+
 namespace DMAC
 {
+
+
+union DSTAT
+{
+	uint32_t value;
+	struct
+	{
+		uint32_t channel_irq : 10; /* Clear with 1 */
+		uint32_t : 3;
+		uint32_t dma_stall : 1; /* Clear with 1 */
+		uint32_t mfifo_empty : 1; /* Clear with 1 */
+		uint32_t bus_error : 1; /* Clear with 1 */
+		uint32_t channel_irq_mask : 10; /* Reverse with 1 */
+		uint32_t : 3;
+		uint32_t stall_irq_mask : 1; /* Reverse with 1 */
+		uint32_t mfifo_irq_mask : 1; /* Reverse with 1 */
+		uint32_t : 1;
+	};
+	/* If you notice above the lower 16bits are cleared when 1 is written to them
+	   while the upper 16bits are reversed. So I'm making this struct to better
+	   implement this behaviour */
+	struct
+	{
+		uint32_t clear : 16;
+		uint32_t reverse : 16;
+	};
+} stat;
 
 union DN_SADR
 {
@@ -51,6 +79,7 @@ struct Channel
 } channels[10];
 
 uint32_t ctrl;
+uint32_t d_enable = 0x1201;
 
 union DMATag
 {
@@ -73,6 +102,7 @@ const char* REG_NAMES[] =
 {
 	"CHCR",
 	"MADR",
+	"QWC",
 	"TADR",
 	"ASR0",
 	"ASR1",
@@ -214,31 +244,54 @@ void WriteIPUTOChannel(uint32_t addr, uint32_t data)
     }
 }
 
+bool sif0_ongoing_transfer = false, fetching_sif0_tag = true;
+DMATag sif0_tag;
+
 void HandleSIF0Transfer()
 {
 	auto& c = channels[5];
 
-	if (channels[5].qwc > 0)
+	fetching_sif0_tag = true;
+
+	if (!sif0_ongoing_transfer)
+		return;
+
+	if (fetching_sif0_tag)
 	{
+		if (SIF::FIFO0_size() >= 2)
+		{
+			printf("Fetching DMATag\n");
+			exit(1);
+		}
+
+		sif0_ongoing_transfer = true;
 	}
 	else
 	{
-		DMATag tag;
-		if (SIF::FIFO0_size() >= 2)
+	}
+
+	if (sif0_ongoing_transfer)
+	{
+		Scheduler::Event sif0_evt;
+		sif0_evt.cycles_from_now = 2;
+		sif0_evt.func = HandleSIF0Transfer;
+		sif0_evt.name = "SIF0 DMA transfer";
+
+		Scheduler::ScheduleEvent(sif0_evt);
+	}
+	else
+	{
+		printf("[emu/DMAC]: Transfer ended on SIF0 channel\n");
+
+		stat.channel_irq |= (1 << 5);
+
+		if (stat.channel_irq & stat.channel_irq_mask)
 		{
-			printf("Oh crap, I gotta do stuff now\n");
+			printf("[emu/DMAC]: Fire interrupt\n");
 			exit(1);
 		}
-		else if (c.chcr.start) // Make sure our transfer wasn't canceled by the EE
-		{
-			// Try again in two cycles to see if SIF's fifo0 has filled
-			Scheduler::Event sif0_evt;
-			sif0_evt.cycles_from_now = 2;
-			sif0_evt.func = HandleSIF0Transfer;
-			sif0_evt.name = "SIF0 DMA transfer";
 
-			Scheduler::ScheduleEvent(sif0_evt);
-		}
+		c.chcr.start = 0;
 	}
 }
 
@@ -262,6 +315,8 @@ void WriteSIF0Channel(uint32_t addr, uint32_t data)
 			sif0_evt.name = "SIF0 DMA transfer";
 
 			Scheduler::ScheduleEvent(sif0_evt);
+
+			sif0_ongoing_transfer = true;
 		}
         break;
     case 0x10:
@@ -285,6 +340,110 @@ void WriteSIF0Channel(uint32_t addr, uint32_t data)
     }
 }
 
+bool fetching_tag = true, ongoing_transfer = false;
+
+DMATag tag;
+
+void HandleSIF1Transfer()
+{
+	auto& c = channels[6];
+
+	if (!ongoing_transfer)
+		return;
+
+	if (fetching_tag)
+	{
+		tag.value = Bus::Read128(c.tadr).u128;
+
+		printf("[emu/DMAC]: Found tag on SIF1 %s at 0x%08x\n", print_128({tag.value}), c.tadr);
+
+		c.qwc = tag.qwc;
+
+		switch (tag.tag_id)
+		{
+		case 0:
+			c.madr = tag.addr;
+			c.tadr += 16;
+			tag.irq = true;  // End the transfer and fire an irq
+			break;
+		case 3:
+			c.madr = tag.addr;
+			c.tadr += 16;
+			break;
+		default:
+			printf("[emu/DMAC]: unknown tag mode %d\n", tag.tag_id);
+			exit(1);
+		}
+
+		fetching_tag = false;
+
+		int cycles_til_transfer = tag.qwc * 2;  // Each qword transfered takes two cycles, so we transfer all at once that many cycles later
+
+		Scheduler::Event sif1_evt;
+		sif1_evt.cycles_from_now = cycles_til_transfer;
+		sif1_evt.func = HandleSIF1Transfer;
+		sif1_evt.name = "SIF1 DMA transfer";
+
+		Scheduler::ScheduleEvent(sif1_evt);
+
+		if (c.chcr.tte)
+		{
+			uint128_t qword = {tag.value};
+
+			for (int i = 0; i < 4; i++)
+			{
+				SIF::WriteFIFO1(qword.u32[i]);
+			}
+		}
+	}
+	else
+	{
+		for (int i = 0; i < tag.qwc; i++)
+		{
+			uint128_t qword = Bus::Read128(c.madr);
+			c.madr += 16;
+
+			printf("[emu/DMAC]: Transfering qword %s\n", print_128(qword));
+
+			for (int i = 0; i < 4; i++)
+			{
+				SIF::WriteFIFO1(qword.u32[i]);
+			}
+		}
+
+		c.qwc = 0;
+
+		fetching_tag = true;
+
+		if (tag.irq)
+			ongoing_transfer = false;
+	}
+
+	if (ongoing_transfer)
+	{
+		Scheduler::Event sif1_evt;
+		sif1_evt.cycles_from_now = 2;
+		sif1_evt.func = HandleSIF1Transfer;
+		sif1_evt.name = "SIF1 DMA transfer";
+
+		Scheduler::ScheduleEvent(sif1_evt);
+	}
+	else
+	{
+		printf("[emu/DMAC]: Transfer ended on SIF1 channel\n");
+
+		stat.channel_irq |= (1 << 6);
+
+		if (stat.channel_irq & stat.channel_irq_mask)
+		{
+			printf("[emu/DMAC]: Fire interrupt\n");
+			exit(1);
+		}
+
+		c.chcr.start = 0;
+	}
+}
+
 void WriteSIF1Channel(uint32_t addr, uint32_t data)
 {
 	printf("[emu/DMAC]: Writing 0x%08x to %s of SIF1 channel\n", data, REG_NAMES[(addr >> 4) & 0xf]);
@@ -293,8 +452,21 @@ void WriteSIF1Channel(uint32_t addr, uint32_t data)
     {
     case 0x00:
         channels[6].chcr.data = data;
-        if (channels[5].chcr.start)
+		if (channels[6].chcr.start && (ctrl & 1))
+		{
             printf("[emu/DMAC]: Starting SIF1 transfer\n");
+
+			// We schedule the transfer 1 cycle from now
+			// This is because the DMAC ticks at half the speed of the EE
+			Scheduler::Event sif1_evt;
+			sif1_evt.cycles_from_now = 1;
+			sif1_evt.func = HandleSIF1Transfer;
+			sif1_evt.name = "SIF1 DMA transfer";
+
+			Scheduler::ScheduleEvent(sif1_evt);
+
+			ongoing_transfer = true;
+		}
         break;
     case 0x10:
         channels[6].madr = data;
@@ -368,7 +540,7 @@ void WriteSPRFROMChannel(uint32_t addr, uint32_t data)
     case 0x80:
         channels[8].sadr.data = data;
         break;
-    }   
+    }
 }
 void WriteSPRTOChannel(uint32_t addr, uint32_t data)
 {
@@ -408,39 +580,40 @@ uint32_t ReadSIF0Channel(uint32_t addr)
 	}
 }
 
-union DSTAT
+uint32_t ReadSIF1Channel(uint32_t addr)
 {
-	uint32_t value;
-	struct
-	{
-		uint32_t channel_irq : 10; /* Clear with 1 */
-		uint32_t : 3;
-		uint32_t dma_stall : 1; /* Clear with 1 */
-		uint32_t mfifo_empty : 1; /* Clear with 1 */
-		uint32_t bus_error : 1; /* Clear with 1 */
-		uint32_t channel_irq_mask : 10; /* Reverse with 1 */
-		uint32_t : 3;
-		uint32_t stall_irq_mask : 1; /* Reverse with 1 */
-		uint32_t mfifo_irq_mask : 1; /* Reverse with 1 */
-		uint32_t : 1;
-	};
-	/* If you notice above the lower 16bits are cleared when 1 is written to them
-	   while the upper 16bits are reversed. So I'm making this struct to better
-	   implement this behaviour */
-	struct
-	{
-		uint32_t clear : 16;
-		uint32_t reverse : 16;
-	};
-} stat;
+	switch (addr & 0xff)
+    {
+	case 0x00:
+		return channels[6].chcr.data;
+	case 0x20:
+		return channels[6].qwc;
+	case 0x30:
+		return channels[6].tadr;
+	}
+}
+
+uint32_t ReadDENABLE()
+{
+	return d_enable;
+}
+
+void WriteDENABLE(uint32_t data)
+{
+	d_enable = data;
+}
 
 uint32_t dpcr;
 uint32_t sqwc;
 
 void WriteDSTAT(uint32_t data)
 {
+	printf("[emu/DMAC]: Writing 0x%08x to D_STAT\n", data);
+
     stat.clear &= ~(data & 0xffff);
     stat.reverse ^= (data >> 16);
+
+	printf("0x%08x\n", stat.value);
 }
 
 uint32_t ReadDSTAT()
@@ -472,4 +645,5 @@ void WriteSQWC(uint32_t data)
 {
     sqwc = data;
 }
-}
+
+}  // namespace DMAC

@@ -77,7 +77,7 @@ public:
 		cg = new Xbyak::CodeGenerator(0xffffffff, base);
 	}
 
-	const uint8_t* GetFreeBase();
+	uint8_t* GetFreeBase();
 };
 
 extern Emitter* emit;

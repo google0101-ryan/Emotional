@@ -246,6 +246,7 @@ private:
 	void EmitBLTZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
 	void EmitBGEZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x01
 	void EmitBLTZL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
+	void EmitBGEZL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x03
 	
 	void EmitMFLO1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x12
 	void EmitMULT1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x18

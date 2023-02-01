@@ -1,3 +1,6 @@
+// (c) Copyright 2022-2023 Ryan Ilari
+// This code is licensed under MIT license (see LICENSE for details)
+
 #pragma once
 
 #include <cstdint>
@@ -15,7 +18,7 @@ struct Event
 	EventFunc func;
 	std::string name;
 
-	bool operator<(Event& rhs) 
+	bool operator<(const Event& rhs) const
 	{
 		return cycles_from_now < rhs.cycles_from_now;
 	}
@@ -25,4 +28,4 @@ void InitScheduler();
 void ScheduleEvent(Event event);
 void CheckScheduler(int cycles);
 
-}
+}  // namespace Scheduler

@@ -495,7 +495,7 @@ void CPU::op_sw()
 	}
 
     if (!isCacheIsolated())
-        Bus::iop_write(addr, regs[rt]);
+        Bus::iop_write<uint32_t>(addr, regs[rt]);
 }
 
 void CPU::op_swr()

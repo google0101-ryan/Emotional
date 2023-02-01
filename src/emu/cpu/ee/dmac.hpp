@@ -20,6 +20,10 @@ void WriteSPRFROMChannel(uint32_t addr, uint32_t data);
 void WriteSPRTOChannel(uint32_t addr, uint32_t data);
 
 uint32_t ReadSIF0Channel(uint32_t addr);
+uint32_t ReadSIF1Channel(uint32_t addr);
+
+uint32_t ReadDENABLE();
+void WriteDENABLE(uint32_t data);
 
 void WriteDSTAT(uint32_t data);
 uint32_t ReadDSTAT();
@@ -32,4 +36,4 @@ uint32_t ReadDPCR();
 
 void WriteSQWC(uint32_t data);
 
-}
+}  // namespace DMAC

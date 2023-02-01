@@ -1,4 +1,7 @@
-#include "gs.h"
+// (c) Copyright 2022-2023 Ryan Ilari
+// This code is licensed under MIT license (see LICENSE for details)
+
+#include <emu/gpu/gs.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -51,4 +54,4 @@ void WriteGSCSR(uint64_t data)
 	}
 }
 
-}
+}  // namespace GS

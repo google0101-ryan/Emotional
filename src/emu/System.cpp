@@ -8,19 +8,19 @@
 #include <emu/cpu/ee/vu.h>
 #include <emu/cpu/iop/cpu.h>
 
-Scheduler::Event vsync_event;
-
-#include <chrono>
+#include <chrono> // NOLINT [build/c++11]
 #include <iostream>
 
+Scheduler::Event vsync_event;
+
 std::chrono::steady_clock::time_point first_tp;
-unsigned long frame_count = 0;
+uint64_t frame_count = 0;
 
 std::chrono::duration<double> uptime()
 {
 	if (first_tp == std::chrono::steady_clock::time_point{})
 		return std::chrono::duration<double>{0};
-	
+
 	return std::chrono::steady_clock::now() - first_tp;
 }
 
@@ -30,7 +30,7 @@ double fps()
 
 	if (uptime_sec == 0)
 		return 0;
-	
+
 	return frame_count / uptime_sec;
 }
 
@@ -56,10 +56,10 @@ void System::LoadBios(std::string biosName)
 
 	uint8_t* rom = new uint8_t[fSize];
 
-	file.read((char*)rom, fSize);
+	file.read(reinterpret_cast<char*>(rom), fSize);
 
 	Bus::LoadBios(rom);
-	
+
 	delete[] rom;
 
 	printf("[emu/Sys]: Loaded BIOS %s\n", biosName.c_str());
