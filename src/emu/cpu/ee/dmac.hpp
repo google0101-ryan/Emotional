@@ -19,6 +19,7 @@ void WriteSIF2Channel(uint32_t addr, uint32_t data);
 void WriteSPRFROMChannel(uint32_t addr, uint32_t data);
 void WriteSPRTOChannel(uint32_t addr, uint32_t data);
 
+uint32_t ReadGIFChannel(uint32_t addr);
 uint32_t ReadSIF0Channel(uint32_t addr);
 uint32_t ReadSIF1Channel(uint32_t addr);
 
@@ -35,5 +36,7 @@ void WriteDPCR(uint32_t data);
 uint32_t ReadDPCR();
 
 void WriteSQWC(uint32_t data);
+
+bool GetCPCOND0();
 
 }  // namespace DMAC

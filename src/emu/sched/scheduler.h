@@ -26,6 +26,8 @@ struct Event
 
 void InitScheduler();
 void ScheduleEvent(Event event);
-void CheckScheduler(int cycles);
+void CheckScheduler(uint64_t cycles);
+
+size_t GetNextTimestamp();
 
 }  // namespace Scheduler

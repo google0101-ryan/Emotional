@@ -21,7 +21,10 @@ set(SOURCES src/main.cpp
 			src/emu/gpu/gif.cpp
 			src/emu/gpu/gs.cpp
 			src/emu/dev/sif.cpp
-			src/emu/dev/cdvd.cpp)
+			src/emu/dev/cdvd.cpp
+			src/emu/dev/sio2.cpp
+			src/emu/cpu/ee/ee_interpret.cpp
+			src/emu/cpu/ee/ee_opcode.cpp)
 
 set(CMAKE_BUILD_TYPE Debug)
 
@@ -29,6 +32,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(ps2 ${SOURCES})
 set(TARGET_NAME ps2)
+
+find_package(SDL2 REQUIRED)
+include_directories(ps2 ${SDL2_INCLUDE_DIRS})
+
+target_link_libraries(ps2 ${SDL2_LIBRARIES})
 
 if(MSVC)
   target_compile_options(${TARGET_NAME} PRIVATE /W4 /WX)

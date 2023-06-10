@@ -6,10 +6,13 @@
 #include <emu/memory/Bus.h>
 #include <emu/sched/scheduler.h>
 #include <emu/dev/sif.h>
+#include <emu/gpu/gif.hpp>
+#include <emu/cpu/ee/EmotionEngine.h>
 
 #include <cstdio>
 #include <cstdlib>
 #include <cassert>
+#include "dmac.hpp"
 
 namespace DMAC
 {
@@ -122,7 +125,7 @@ void WriteVIF0Channel(uint32_t addr, uint32_t data)
             printf("[emu/DMAC]: Starting VIF0 transfer\n");
         break;
     case 0x10:
-        channels[0].madr = data;
+        channels[0].madr = data  & 0x01fffff0;
         break;
     case 0x30:
         channels[0].tadr = data;
@@ -149,7 +152,7 @@ void WriteVIF1Channel(uint32_t addr, uint32_t data)
             printf("[emu/DMAC]: Starting VIF1 transfer\n");
         break;
     case 0x10:
-        channels[1].madr = data;
+        channels[1].madr = data & 0x01fffff0;
         break;
     case 0x30:
         channels[1].tadr = data;
@@ -165,6 +168,115 @@ void WriteVIF1Channel(uint32_t addr, uint32_t data)
         break;
     }
 }
+
+void DoGIFTransfer()
+{
+    auto& c = channels[2];
+
+    assert(c.chcr.mode == 0);
+
+    while (c.qwc)
+    {
+        uint128_t data = Bus::Read128(c.madr);
+        c.madr += 16;
+        GIF::WriteFIFO(data);
+        c.qwc--;
+    }
+
+    c.chcr.start = 0;
+    
+    stat.channel_irq |= (1 << 2);
+
+#ifdef EE_JIT
+	if (stat.channel_irq & stat.channel_irq_mask)
+        EmotionEngine::SetIp1Pending();
+#endif
+}
+
+bool fetching_gif_tag = false;
+bool gif_ongoing_transfer = false;
+bool gif_irq_on_done = false;
+
+DMATag gif_tag;
+
+void DoGIFTransferChain()
+{
+    auto& c = channels[2];
+
+	fetching_gif_tag = true;
+
+	if (!gif_ongoing_transfer)
+		return;
+ 
+    if (c.qwc > 0)
+	{
+        while (c.qwc)
+        {
+            uint128_t data = Bus::Read128(c.madr);
+            c.madr += 16;
+            GIF::WriteFIFO(data);
+            c.qwc--;
+
+            printf("Writing %s to GIF FIFO\n", print_128(data));
+        }
+	}
+	else if (gif_irq_on_done)
+	{
+		printf("[emu/DMAC]: Transfer ended on GIF channel\n");
+
+		stat.channel_irq |= (1 << 2);
+
+#ifdef EE_JIT
+		if (stat.channel_irq & stat.channel_irq_mask)
+            EmotionEngine::SetIp1Pending();
+#endif
+
+		c.chcr.start = 0;
+        gif_ongoing_transfer = false;
+        gif_irq_on_done = false;
+	}
+    else
+    {
+        auto address = c.tadr;
+
+        gif_tag.value = Bus::Read128(address).u128;
+
+        c.qwc = gif_tag.qwc;
+        c.chcr.tag = (gif_tag.value >> 16) & 0xffff;
+
+        uint16_t tag_id = gif_tag.tag_id;
+        switch (tag_id)
+        {
+        case 0:
+            gif_irq_on_done = true;
+            c.madr = gif_tag.addr;
+            c.tadr += 16;
+            break;
+        case 1:
+            c.madr = c.tadr+16;
+            c.tadr = c.madr+c.qwc*16;
+            break;
+        case 7:
+            gif_irq_on_done = true;
+            c.madr = c.tadr+16;
+            break;
+        default:
+            printf("[emu/GIF]: Unknown tag id %d\n", tag_id);
+            exit(1);
+        }
+    }
+
+	if (gif_ongoing_transfer)
+	{
+		Scheduler::Event gif_evt;
+		gif_evt.cycles_from_now = 2;
+		gif_evt.func = DoGIFTransferChain;
+		gif_evt.name = "GIF DMA transfer";
+
+		Scheduler::ScheduleEvent(gif_evt);
+	}
+}
+
 void WriteGIFChannel(uint32_t addr, uint32_t data)
 {
     switch (addr & 0xff)
@@ -172,10 +284,24 @@ void WriteGIFChannel(uint32_t addr, uint32_t data)
     case 0x00:
         channels[2].chcr.data = data;
         if (channels[2].chcr.start)
-            printf("[emu/DMAC]: Starting GIF transfer\n");
+        {
+            Scheduler::Event gif_event;
+            gif_event.cycles_from_now = channels[2].qwc*4;
+            gif_event.func = (channels[2].chcr.mode == 0 ? DoGIFTransfer : DoGIFTransferChain);
+            gif_event.name = "GIF DMAC transfer";
+            Scheduler::ScheduleEvent(gif_event);
+            printf("Starting GIF DMAC transfer (%d qwords)\n", channels[2].qwc);
+            gif_ongoing_transfer = true;
+            gif_irq_on_done = false;
+        }
         break;
     case 0x10:
-        channels[2].madr = data;
+        channels[2].madr = data & 0x01fffff0;
+        printf("Writing 0x%08x to GIF.MADR\n", data & 0x01fffff0);
+        break;
+    case 0x20:
+        channels[2].qwc = data;
+        printf("Writing 0x%08x to GIF.QWC\n", data);
         break;
     case 0x30:
         channels[2].tadr = data;
@@ -201,7 +327,7 @@ void WriteIPUFROMChannel(uint32_t addr, uint32_t data)
             printf("[emu/DMAC]: Starting IPU_FROM transfer\n");
         break;
     case 0x10:
-        channels[3].madr = data;
+        channels[3].madr = data & 0x01fffff0;
         break;
     case 0x30:
         channels[3].tadr = data;
@@ -227,7 +353,7 @@ void WriteIPUTOChannel(uint32_t addr, uint32_t data)
             printf("[emu/DMAC]: Starting IPU_TO transfer\n");
         break;
     case 0x10:
-        channels[4].madr = data;
+        channels[4].madr = data & 0x01fffff0;
         break;
     case 0x30:
         channels[4].tadr = data;
@@ -245,7 +371,138 @@ void WriteIPUTOChannel(uint32_t addr, uint32_t data)
 }
 
 bool sif0_ongoing_transfer = false, fetching_sif0_tag = true;
+bool irq_on_done = false;
 DMATag sif0_tag;
+
+size_t buf_pos = 0;
+
+struct SifCmdHeader
+{
+    uint32_t psize:8;
+    uint32_t dsize:24;
+    uint32_t dest;
+    uint32_t cid;
+    uint32_t opt;
+};
+
+struct SifInitPkt
+{
+    SifCmdHeader hdr;
+    uint32_t buf;
+};
+
+struct SifCmdSRegData
+{
+    SifCmdHeader header;
+    int index;
+    uint32_t value;
+};
+
+struct SifRpcBindPkt
+{
+    SifCmdHeader header;
+    int rec_id;
+    uint32_t pkt_addr;
+    int rpc_id;
+    uint32_t client;
+    uint32_t sid;
+};
+
+struct SifRpcCallPkt
+{
+    SifCmdHeader header;
+    int rec_id;
+    uint32_t pkt_addr;
+    int rpc_id;
+    uint32_t client;
+    int rpc_number;
+    int send_size;
+    uint32_t receive;
+    int recv_size;
+    int rmode;
+    uint32_t server;
+};
+
+uint32_t currentSvrId = 0;
+
+const char* GetFuncName(uint32_t func_id)
+{
+    switch (currentSvrId)
+    {
+    case 0x80000006:
+    {
+        switch (func_id)
+        {
+        case 1:
+            return "SifLoadElf";
+        default:
+            printf("Unknown LOADFILE func %d\n", func_id);
+            exit(1);
+        }
+    }
+    default:
+        printf("Unknown server 0x%08x\n", currentSvrId);
+        exit(1);
+    }
+}
+
+void HandleSifCommand(SifCmdHeader* hdr)
+{
+    if ((hdr->cid & 0xF0000000) != 0x80000000)
+        return;
+    
+    switch (hdr->cid)
+    {
+    case 0x80000001:
+    {
+        SifCmdSRegData* sregData = (SifCmdSRegData*)hdr;
+        printf("sifSetSReg(0x%08x, 0x%08x)\n", sregData->index, sregData->value);
+        break;
+    }
+    case 0x80000002:
+    {
+        SifInitPkt *initPkt = (SifInitPkt*)hdr;
+        if (hdr->opt)
+            printf("SIFCMD Init, opt=1 (finish initialization)\n");
+        else
+            printf("SIFCMD Init, buf=0x%08x\n", initPkt->buf);
+        break;
+    }
+    case 0x80000009:
+    {
+        SifRpcBindPkt* pkt = (SifRpcBindPkt*)hdr;
+        printf("SifRpcBind(0x%08x) (", pkt->sid);
+
+        currentSvrId = pkt->sid;
+
+        switch (pkt->sid)
+        {
+        case 0x80000001:
+            printf("FILEIO");
+            break;
+        case 0x80000006:
+            printf("LOADFILE");
+            break;
+        default:
+            printf("Unknown server ID 0x%08x\n", pkt->sid);
+            exit(1);
+        }
+        printf(")\n");
+        break;
+    }
+    case 0x80000008:
+        break;
+    case 0x8000000A:
+    {
+        SifRpcCallPkt* pkt = (SifRpcCallPkt*)hdr;
+        printf("SifRpcCall(%s)\n", GetFuncName(pkt->rpc_number));
+        break;
+    }
+    default:
+        printf("Unknown SIF command 0x%08x\n", hdr->cid);
+        exit(1);
+    }
+}
 
 void HandleSIF0Transfer()
 {
@@ -255,20 +512,70 @@ void HandleSIF0Transfer()
 
 	if (!sif0_ongoing_transfer)
 		return;
-
-	if (fetching_sif0_tag)
+ 
+    if (c.qwc > 0)
 	{
-		if (SIF::FIFO0_size() >= 2)
-		{
-			printf("Fetching DMATag\n");
-			exit(1);
-		}
+        while (c.qwc)
+        {
+            if (SIF::FIFO0_size() >= 4)
+            {
+                uint32_t data[4];
+                for (int i = 0; i < 4; i++)
+                    data[i] = SIF::ReadAndPopSIF0();
+                
+                __uint128_t qword = *(__uint128_t*)data;
+                
+                Bus::Write128(c.madr, {qword});
 
-		sif0_ongoing_transfer = true;
+                c.qwc--;
+                c.madr += 16;
+            }
+            else
+                break;
+        }
 	}
-	else
+	else if (irq_on_done)
 	{
+		printf("[emu/DMAC]: Transfer ended on SIF0 channel\n");
+
+		stat.channel_irq |= (1 << 5);
+
+		if (stat.channel_irq & stat.channel_irq_mask)
+        {
+            printf("[emu/DMAC]: Trigger SIF0 interrupt\n");
+#ifdef EE_JIT
+            EmotionEngine::SetIp1Pending();
+#else
+#endif
+        }
+
+		c.chcr.start = 0;
+        sif0_ongoing_transfer = false;
+        irq_on_done = false;
 	}
+    else
+    {
+        if (SIF::FIFO0_size() >= 2)
+        {
+            uint32_t data[2];
+            for (int i = 0; i < 2; i++)
+                data[i] = SIF::ReadAndPopSIF0();
+            
+            sif0_tag.value = *(uint64_t*)data;
+            printf("[emu/DMAC]: Read SIF0 tag 0x%08lx\n", (uint64_t)sif0_tag.value);
+
+            c.qwc = sif0_tag.qwc;
+            c.chcr.tag = (sif0_tag.value >> 16) & 0xffff;
+            c.madr = sif0_tag.addr;
+            c.tadr += 16;
+
+            printf("[emu/DMAC]: Tag contains %d qwords, to be transferred to 0x%08x (%d)\n", c.qwc, c.madr, sif0_tag.irq);
+            fetching_sif0_tag = false;
+
+            if (c.chcr.tie && sif0_tag.irq)
+                irq_on_done = true;
+        }
+    }
 
 	if (sif0_ongoing_transfer)
 	{
@@ -278,20 +585,6 @@ void HandleSIF0Transfer()
 		sif0_evt.name = "SIF0 DMA transfer";
 
 		Scheduler::ScheduleEvent(sif0_evt);
-	}
-	else
-	{
-		printf("[emu/DMAC]: Transfer ended on SIF0 channel\n");
-
-		stat.channel_irq |= (1 << 5);
-
-		if (stat.channel_irq & stat.channel_irq_mask)
-		{
-			printf("[emu/DMAC]: Fire interrupt\n");
-			exit(1);
-		}
-
-		c.chcr.start = 0;
 	}
 }
 
@@ -317,10 +610,14 @@ void WriteSIF0Channel(uint32_t addr, uint32_t data)
 			Scheduler::ScheduleEvent(sif0_evt);
 
 			sif0_ongoing_transfer = true;
+            fetching_sif0_tag = true;
+            irq_on_done = false;
 		}
+        else
+            sif0_ongoing_transfer = false;
         break;
     case 0x10:
-        channels[5].madr = data;
+        channels[5].madr = data & 0x01fffff0;
         break;
 	case 0x20:
 		channels[5].qwc = data & 0xffff;
@@ -341,106 +638,103 @@ void WriteSIF0Channel(uint32_t addr, uint32_t data)
 }
 
 bool fetching_tag = true, ongoing_transfer = false;
+bool sif1_irq_on_done = false;
 
 DMATag tag;
 
 void HandleSIF1Transfer()
 {
+	
 	auto& c = channels[6];
+
+	fetching_tag = true;
 
 	if (!ongoing_transfer)
 		return;
-
-	if (fetching_tag)
+ 
+    if (c.qwc > 0)
 	{
-		tag.value = Bus::Read128(c.tadr).u128;
+        while (c.qwc != 0)
+        {
+            uint128_t qword = Bus::Read128(c.madr);
 
-		printf("[emu/DMAC]: Found tag on SIF1 %s at 0x%08x\n", print_128({tag.value}), c.tadr);
+            printf("[emu/DMAC]: Writing %s to SIF1 FIFO\n", print_128({qword.u128}));
+            
+            for (int i = 0; i < 4; i++)
+                SIF::WriteFIFO1(qword.u32[i]);
 
-		c.qwc = tag.qwc;
-
-		switch (tag.tag_id)
-		{
-		case 0:
-			c.madr = tag.addr;
-			c.tadr += 16;
-			tag.irq = true;  // End the transfer and fire an irq
-			break;
-		case 3:
-			c.madr = tag.addr;
-			c.tadr += 16;
-			break;
-		default:
-			printf("[emu/DMAC]: unknown tag mode %d\n", tag.tag_id);
-			exit(1);
-		}
-
-		fetching_tag = false;
-
-		int cycles_til_transfer = tag.qwc * 2;  // Each qword transfered takes two cycles, so we transfer all at once that many cycles later
-
-		Scheduler::Event sif1_evt;
-		sif1_evt.cycles_from_now = cycles_til_transfer;
-		sif1_evt.func = HandleSIF1Transfer;
-		sif1_evt.name = "SIF1 DMA transfer";
-
-		Scheduler::ScheduleEvent(sif1_evt);
-
-		if (c.chcr.tte)
-		{
-			uint128_t qword = {tag.value};
-
-			for (int i = 0; i < 4; i++)
-			{
-				SIF::WriteFIFO1(qword.u32[i]);
-			}
-		}
+            c.qwc--;
+            c.madr += 16;
+        }
 	}
-	else
-	{
-		for (int i = 0; i < tag.qwc; i++)
-		{
-			uint128_t qword = Bus::Read128(c.madr);
-			c.madr += 16;
-
-			printf("[emu/DMAC]: Transfering qword %s\n", print_128(qword));
-
-			for (int i = 0; i < 4; i++)
-			{
-				SIF::WriteFIFO1(qword.u32[i]);
-			}
-		}
-
-		c.qwc = 0;
-
-		fetching_tag = true;
-
-		if (tag.irq)
-			ongoing_transfer = false;
-	}
-
-	if (ongoing_transfer)
-	{
-		Scheduler::Event sif1_evt;
-		sif1_evt.cycles_from_now = 2;
-		sif1_evt.func = HandleSIF1Transfer;
-		sif1_evt.name = "SIF1 DMA transfer";
-
-		Scheduler::ScheduleEvent(sif1_evt);
-	}
-	else
+	else if (sif1_irq_on_done)
 	{
 		printf("[emu/DMAC]: Transfer ended on SIF1 channel\n");
 
 		stat.channel_irq |= (1 << 6);
 
 		if (stat.channel_irq & stat.channel_irq_mask)
-		{
-			printf("[emu/DMAC]: Fire interrupt\n");
-			exit(1);
-		}
+        {
+            printf("[emu/DMAC]: Trigger SIF1 interrupt\n");
+#ifdef EE_JIT
+            EmotionEngine::SetIp1Pending();
+#else
+#endif
+        }
 
 		c.chcr.start = 0;
+        ongoing_transfer = false;
+        sif1_irq_on_done = false;
+	}
+    else
+    {
+        auto address = c.tadr;
+
+        tag.value = Bus::Read128(address).u128;
+
+        printf("[emu/DMAC]: Read SIF1 tag %s from 0x%08x (%d qwords, from 0x%08x, tag_id %d)\n", print_128({tag.value}), address, tag.qwc, tag.addr, tag.tag_id);
+
+        c.qwc = tag.qwc;
+        c.chcr.tag = (tag.value >> 16) & 0xffff;
+
+        uint16_t tag_id = tag.tag_id;
+        switch (tag_id)
+        {
+        case 0:
+            c.madr = tag.addr;
+            c.tadr += 16;
+            sif1_irq_on_done = true;
+            break;
+        case 1:
+            c.madr = c.tadr+16;
+            c.tadr = c.madr+(c.qwc*16);
+            break;
+        case 2:
+            c.madr = c.tadr+16;
+            c.tadr = tag.addr;
+            break;
+        case 3:
+        case 4:
+            c.madr = tag.addr;
+            c.tadr += 16;
+            break;
+        default:
+            printf("Unknown tag ID %d\n", tag.tag_id);
+            exit(1);
+        }
+
+        if (c.chcr.tie && tag.irq)
+            irq_on_done = true;
+    }
+
+	if (ongoing_transfer)
+	{
+		Scheduler::Event sif_evt;
+		sif_evt.cycles_from_now = 2;
+		sif_evt.func = HandleSIF1Transfer;
+		sif_evt.name = "SIF1 DMA transfer";
+
+		Scheduler::ScheduleEvent(sif_evt);
 	}
 }
 
@@ -466,10 +760,14 @@ void WriteSIF1Channel(uint32_t addr, uint32_t data)
 			Scheduler::ScheduleEvent(sif1_evt);
 
 			ongoing_transfer = true;
+            fetching_tag = true;
+            sif1_irq_on_done = false;
 		}
+        else
+            ongoing_transfer = false;
         break;
     case 0x10:
-        channels[6].madr = data;
+        channels[6].madr = data & 0x01fffff0;
         break;
 	case 0x20:
 		channels[6].qwc = data;
@@ -499,7 +797,7 @@ void WriteSIF2Channel(uint32_t addr, uint32_t data)
             printf("[emu/DMAC]: Starting SIF2 transfer\n");
         break;
     case 0x10:
-        channels[7].madr = data;
+        channels[7].madr = data & 0x01fffff0;
         break;
     case 0x30:
         channels[7].tadr = data;
@@ -526,7 +824,7 @@ void WriteSPRFROMChannel(uint32_t addr, uint32_t data)
             printf("[emu/DMAC]: Starting SPR_FROM transfer\n");
         break;
     case 0x10:
-        channels[8].madr = data;
+        channels[8].madr = data & 0x01fffff0;
         break;
     case 0x30:
         channels[8].tadr = data;
@@ -552,7 +850,7 @@ void WriteSPRTOChannel(uint32_t addr, uint32_t data)
             printf("[emu/DMAC]: Starting SPR_TO transfer\n");
         break;
     case 0x10:
-        channels[9].madr = data;
+        channels[9].madr = data & 0x01fffff0;
         break;
     case 0x30:
         channels[9].tadr = data;
@@ -566,6 +864,25 @@ void WriteSPRTOChannel(uint32_t addr, uint32_t data)
     case 0x80:
         channels[9].sadr.data = data;
         break;
+    }
+}
+
+uint32_t ReadGIFChannel(uint32_t addr)
+{
+    switch (addr & 0xff)
+    {
+    case 0x00:
+        return channels[2].chcr.data;
+    case 0x10:
+        return channels[2].madr;
+    case 0x30:
+        return channels[2].tadr;
+    case 0x40:
+        return channels[2].asr[0];
+    case 0x50:
+        return channels[2].asr[1];
+    case 0x80:
+        return channels[2].sadr.data;
     }
 }
 
@@ -613,11 +930,18 @@ void WriteDSTAT(uint32_t data)
     stat.clear &= ~(data & 0xffff);
     stat.reverse ^= (data >> 16);
 
-	printf("0x%08x\n", stat.value);
+#ifdef EE_JIT
+	if (stat.channel_irq & stat.channel_irq_mask)
+
+        EmotionEngine::SetIp1Pending();
+    else
+        EmotionEngine::ClearIp1Pending();
+#endif
 }
 
 uint32_t ReadDSTAT()
 {
+    printf("[emu/DMAC]: Reading 0x%08x from D_STAT\n", stat.value);
     return stat.value;
 }
 
@@ -644,6 +968,11 @@ uint32_t ReadDPCR()
 void WriteSQWC(uint32_t data)
 {
     sqwc = data;
+}
+
+bool GetCPCOND0()
+{
+    return (~(dpcr & 0x3FF) | stat.channel_irq) == 0x3FF;
 }
 
 }  // namespace DMAC

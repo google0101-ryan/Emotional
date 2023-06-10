@@ -269,17 +269,20 @@ public:
     void Reset();
 	~CPU();
 
-    void Clock(int cycles);
+    void Clock(uint64_t cycles);
     void Dump();
 
     bool IntPending();
+    bool CanDisassemble();
 };
 
 namespace IOP_MANAGEMENT
 {
 
-void Clock(int cycles);
+void Clock(uint64_t cycles);
 void Reset();
 void Dump();
+
+bool CanDisassemble();
 
 }

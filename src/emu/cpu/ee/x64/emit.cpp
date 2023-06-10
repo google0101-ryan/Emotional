@@ -8,8 +8,25 @@
 #include <emu/sched/scheduler.h>
 #include <fstream>
 #include <cassert>
+#include <emu/cpu/ee/dmac.hpp>
+#include <emu/cpu/ee/vu.h>
 
 EE_JIT::Emitter* EE_JIT::emit;
+
+float convert(uint32_t value)
+{
+    switch(value & 0x7F800000)
+    {
+        case 0x0:
+            value &= 0x80000000;
+            return *(float*)&value;
+        case 0x7F800000:
+            value = (value & 0x80000000)|0x7F7FFFFF;
+            return *(float*)&value;
+        default:
+            return *(float*)&value;
+    }
+}
 
 void EE_JIT::Emitter::EmitMov(IRInstruction i)
 {
@@ -36,6 +53,18 @@ void EE_JIT::Emitter::EmitMov(IRInstruction i)
 		cg->lea(ee_reg_ptr, cg->ptr[cg->rbp + dest_offset]);
 		cg->mov(cg->dword[ee_reg_ptr], cop_reg_value);
 	}
+	else if (i.args[1].IsCop1()) // Mfc1
+	{
+		Xbyak::Reg64 ee_reg_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+		Xbyak::Reg64 cop_reg_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+		Xbyak::Reg32 cop_reg_value = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+		auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[0].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u32)));
+		auto src_offset = ((offsetof(EmotionEngine::ProcessorState, fprs)) + (i.args[1].GetReg() * sizeof(float)));
+		cg->lea(cop_reg_ptr, cg->ptr[cg->rbp + src_offset]);
+		cg->mov(cop_reg_value, cg->dword[cop_reg_ptr]);
+		cg->lea(ee_reg_ptr, cg->ptr[cg->rbp + dest_offset]);
+		cg->mov(cg->dword[ee_reg_ptr], cop_reg_value);
+	}
 	else if (i.args[1].IsReg()) // Mtc0
 	{
 		if (i.args[0].IsCop0())
@@ -44,7 +73,19 @@ void EE_JIT::Emitter::EmitMov(IRInstruction i)
 			Xbyak::Reg64 cop_reg_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
 			Xbyak::Reg32 ee_reg_value = Xbyak::Reg32(reg_alloc->AllocHostRegister());
 			auto src_offset = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[1].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u32)));
-			auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, cop0_regs)) + (i.args[0].GetReg() * sizeof(uint32_t)));
+			auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, cop0_regs)) + (i.args[0].GetReg() * sizeof(float)));
+			cg->lea(cop_reg_ptr, cg->ptr[cg->rbp + dest_offset]);
+			cg->lea(ee_reg_ptr, cg->ptr[cg->rbp + src_offset]);
+			cg->mov(ee_reg_value, cg->dword[ee_reg_ptr]);
+			cg->mov(cg->dword[cop_reg_ptr], ee_reg_value);
+		}
+		else if (i.args[0].IsCop1())
+		{
+			Xbyak::Reg64 ee_reg_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+			Xbyak::Reg64 cop_reg_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+			Xbyak::Reg32 ee_reg_value = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+			auto src_offset = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[1].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u32)));
+			auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, fprs)) + (i.args[0].GetReg() * sizeof(uint32_t)));
 			cg->lea(cop_reg_ptr, cg->ptr[cg->rbp + dest_offset]);
 			cg->lea(ee_reg_ptr, cg->ptr[cg->rbp + src_offset]);
 			cg->mov(ee_reg_value, cg->dword[ee_reg_ptr]);
@@ -61,6 +102,48 @@ void EE_JIT::Emitter::EmitMov(IRInstruction i)
 		printf("[emu/JIT]: Unknown MOV format\n");
 		exit(1);
 	}
+}
+
+void EE_JIT::Emitter::EmitPMFLO(IRInstruction i)
+{
+	Xbyak::Reg64 ee_reg_lo_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg64 ee_reg_hi_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg64 ee_lo0_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg64 ee_lo1_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg64 tmp = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	
+	auto dst_offset_lo = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[0].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u64)));
+	auto dst_offset_hi = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[0].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u64)) + sizeof(uint64_t));
+	auto lo0_offs = ((offsetof(EmotionEngine::ProcessorState, lo)));
+	auto lo1_offs = ((offsetof(EmotionEngine::ProcessorState, lo1)));
+	cg->lea(ee_reg_lo_ptr, cg->ptr[cg->rbp + dst_offset_lo]);
+	cg->lea(ee_reg_hi_ptr, cg->ptr[cg->rbp + dst_offset_hi]);
+
+	cg->mov(tmp, cg->qword[cg->rbp + lo0_offs]);
+	cg->mov(cg->qword[ee_reg_lo_ptr], tmp);
+	cg->mov(tmp, cg->qword[cg->rbp + lo1_offs]);
+	cg->mov(cg->qword[ee_reg_hi_ptr], tmp);
+}
+
+void EE_JIT::Emitter::EmitPMFHI(IRInstruction i)
+{
+	Xbyak::Reg64 ee_reg_lo_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg64 ee_reg_hi_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg64 ee_hi0_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg64 ee_hi1_ptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg64 tmp = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	
+	auto dst_offset_lo = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[0].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u64)));
+	auto dst_offset_hi = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[0].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u64)) + sizeof(uint64_t));
+	auto hi0_offs = ((offsetof(EmotionEngine::ProcessorState, hi)));
+	auto hi1_offs = ((offsetof(EmotionEngine::ProcessorState, hi1)));
+	cg->lea(ee_reg_lo_ptr, cg->ptr[cg->rbp + dst_offset_lo]);
+	cg->lea(ee_reg_hi_ptr, cg->ptr[cg->rbp + dst_offset_hi]);
+
+	cg->mov(tmp, cg->qword[cg->rbp + hi0_offs]);
+	cg->mov(cg->qword[ee_reg_lo_ptr], tmp);
+	cg->mov(tmp, cg->qword[cg->rbp + hi1_offs]);
+	cg->mov(cg->qword[ee_reg_hi_ptr], tmp);
 }
 
 void EE_JIT::Emitter::EmitMovCond(IRInstruction i)
@@ -370,12 +453,12 @@ void EE_JIT::Emitter::EmitAND(IRInstruction i)
 
 
 		cg->lea(src1_ptr, cg->ptr[cg->rbp + src1_offset]);
-		cg->mov(src1_value, cg->dword[src1_ptr]);
+		cg->mov(src1_value, cg->qword[src1_ptr]);
 		cg->lea(src2_ptr, cg->ptr[cg->rbp + src2_offset]);
-		cg->mov(src2_value, cg->dword[src2_ptr]);
+		cg->mov(src2_value, cg->qword[src2_ptr]);
 		cg->and_(src1_value, src2_value);
 		cg->lea(dest_ptr, cg->ptr[cg->rbp + dest_offset]);
-		cg->mov(cg->dword[dest_ptr], src1_value);
+		cg->mov(cg->qword[dest_ptr], src1_value);
 	}
 	else
 	{
@@ -969,7 +1052,7 @@ void EE_JIT::Emitter::EmitMULT(IRInstruction i)
 
 		cg->mov(src1, cg->dword[cg->rbp + src1_offset]);
 		cg->mov(src2, cg->dword[cg->rbp + src2_offset]);
-		cg->mul(src2);
+		cg->imul(src2);
 
 		cg->mov(cg->dword[cg->rbp + hi_offset], Xbyak::Reg32(RegisterAllocator::RDX));
 		cg->mov(cg->dword[cg->rbp + lo_offset], Xbyak::Reg32(RegisterAllocator::RAX));
@@ -977,8 +1060,24 @@ void EE_JIT::Emitter::EmitMULT(IRInstruction i)
 	}
 	else
 	{
-		printf("[emu/JIT]: Unhandled unsigned multiply!\n");
-		exit(1);
+		Xbyak::Reg64 src1 = Xbyak::Reg64(RegisterAllocator::RAX);
+		reg_alloc->MarkRegUsed(RegisterAllocator::RAX);
+		reg_alloc->MarkRegUsed(RegisterAllocator::RDX);
+		Xbyak::Reg64 src2 = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+		Xbyak::Reg64 dest = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+		auto src1_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[2].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
+		auto src2_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[1].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
+		auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
+		auto hi_offset = ((offsetof(EmotionEngine::ProcessorState, hi)));
+		auto lo_offset = ((offsetof(EmotionEngine::ProcessorState, lo)));
+
+		cg->mov(src1, cg->dword[cg->rbp + src1_offset]);
+		cg->mov(src2, cg->dword[cg->rbp + src2_offset]);
+		cg->mul(src2);
+
+		cg->mov(cg->dword[cg->rbp + hi_offset], Xbyak::Reg32(RegisterAllocator::RDX));
+		cg->mov(cg->dword[cg->rbp + lo_offset], Xbyak::Reg32(RegisterAllocator::RAX));
+		cg->mov(cg->dword[cg->rbp + dest_offset], Xbyak::Reg32(RegisterAllocator::RAX));
 	}
 }
 
@@ -1091,7 +1190,7 @@ void EE_JIT::Emitter::EmitMoveFromHi(IRInstruction i)
 {
 	Xbyak::Reg32 hi_val = Xbyak::Reg32(reg_alloc->AllocHostRegister());
 	auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
-	auto hi_offset = ((offsetof(EmotionEngine::ProcessorState, hi)));
+	auto hi_offset = i.is_mmi_divmul ? ((offsetof(EmotionEngine::ProcessorState, hi1))) : ((offsetof(EmotionEngine::ProcessorState, hi)));
 
 	cg->mov(hi_val, cg->dword[cg->rbp + hi_offset]);
 	cg->mov(cg->dword[cg->rbp + dest_offset], hi_val);
@@ -1132,6 +1231,15 @@ void EE_JIT::Emitter::EmitBranchRegImm(IRInstruction i)
 
 	Xbyak::Label end;
 
+	if (i.should_link)
+	{
+		Xbyak::Reg32 next_pc_val = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+		auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (31 * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+
+
+		cg->mov(next_pc_val, cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)]);
+		cg->mov(cg->dword[cg->rbp + dest_offset], next_pc_val);
+	}
 	cg->mov(next_pc, cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, pc)]);
 	cg->add(next_pc, i.args[1].GetImm());
 	cg->mov(cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)], next_pc);
@@ -1227,19 +1335,33 @@ void EE_JIT::Emitter::EmitDI(IRInstruction i)
 	cg->L(end);
 }
 
+bool elf_loaded = false;
+
 void HandleERET()
 {
 	uint32_t status = EmotionEngine::GetState()->cop0_regs[12];
 
+	// EmotionEngine::can_disassemble = true;
+
 	if (status & (1 << 2))
 	{
 		EmotionEngine::GetState()->cop0_regs[12] &= ~(1 << 2);
-		EmotionEngine::GetState()->next_pc = EmotionEngine::GetState()->cop0_regs[30];
+		EmotionEngine::GetState()->pc = EmotionEngine::GetState()->cop0_regs[30];
+		EmotionEngine::GetState()->next_pc = EmotionEngine::GetState()->cop0_regs[30]+4;
 	}
 	else
 	{
 		EmotionEngine::GetState()->cop0_regs[12] &= ~(1 << 1);
-		EmotionEngine::GetState()->next_pc = EmotionEngine::GetState()->cop0_regs[14];
+		EmotionEngine::GetState()->pc = EmotionEngine::GetState()->cop0_regs[14];
+		EmotionEngine::GetState()->next_pc = EmotionEngine::GetState()->cop0_regs[14]+4;
+	}
+		
+	if (!elf_loaded)
+	{
+		uint32_t entry = Bus::LoadElf("graph.elf");
+	 	EmotionEngine::GetState()->pc = entry;
+	 	EmotionEngine::GetState()->next_pc = entry+4;
+	 	elf_loaded = true;
 	}
 }
 
@@ -1248,7 +1370,7 @@ void EE_JIT::Emitter::EmitERET(IRInstruction i)
 	cg->mov(cg->rax, reinterpret_cast<uint64_t>(HandleERET));
 	cg->call(cg->rax);
 	reg_alloc->Reset();
-	EmitIncPC(i);
+	// EmitIncPC(i);
 	cg->ret();
 }
 
@@ -1258,7 +1380,7 @@ void EE_JIT::Emitter::EmitSyscall(IRInstruction i)
 	cg->mov(cg->rax, reinterpret_cast<uint64_t>(EmotionEngine::Exception));
 	cg->call(cg->rax);
 	reg_alloc->Reset();
-	EmitIncPC(i);
+	// EmitIncPC(i);
 	cg->ret();
 }
 
@@ -1292,6 +1414,659 @@ void EE_JIT::Emitter::EmitEI(IRInstruction i)
 	cg->or_(stat_reg, 1 << 16);
 	cg->mov(cg->dword[cg->rbp + stat_offset], stat_reg);
 
+	cg->L(end);
+}
+
+void plzcw(int rs, int rd)
+{
+	auto state = EmotionEngine::GetState();
+
+	for (int i = 0; i < 2; i++)
+	{
+		uint32_t word = state->regs[rs].u32[i];
+		bool msb = word & (1 << 31);
+
+		word = (msb ? ~word : word);
+
+		state->regs[rd].u32[i] = (word != 0 ? __builtin_clz(word) - 1 : 0x1f);
+	}
+
+	printf("plzcw (0x%08lx)\n", state->regs[rd].u64[0]);
+}
+
+void EE_JIT::Emitter::EmitPLZCW(IRInstruction i)
+{
+	assert(i.args.size() == 2 && i.args[0].IsReg() && i.args[1].IsReg());
+	cg->mov(cg->edi, i.args[1].GetReg());
+	cg->mov(cg->esi, i.args[0].GetReg());
+	cg->mov(cg->rax, reinterpret_cast<uint64_t>(plzcw));
+	cg->call(cg->rax);
+}
+
+void EE_JIT::Emitter::EmitMTLO(IRInstruction i)
+{
+	Xbyak::Reg64 reg_val = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	auto src_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+	auto lo_offset = i.is_mmi_divmul ? ((offsetof(EmotionEngine::ProcessorState, lo1))) : ((offsetof(EmotionEngine::ProcessorState, lo)));
+	cg->mov(reg_val, cg->qword[cg->rbp + src_offs]);
+	cg->mov(cg->dword[cg->rbp + lo_offset], reg_val);
+}
+
+void EE_JIT::Emitter::EmitMTHI(IRInstruction i)
+{
+	Xbyak::Reg64 reg_val = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	auto src_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+	auto hi_offset = i.is_mmi_divmul ? ((offsetof(EmotionEngine::ProcessorState, lo1))) : ((offsetof(EmotionEngine::ProcessorState, lo)));
+	cg->mov(reg_val, cg->qword[cg->rbp + src_offs]);
+	cg->mov(cg->dword[cg->rbp + hi_offset], reg_val);
+}
+
+void EE_JIT::Emitter::EmitPCPYLD(IRInstruction i)
+{
+	Xbyak::Reg64 reg_val = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	auto src1_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
+	auto src2_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[1].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
+	auto dst_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[2].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
+	
+	cg->mov(reg_val, cg->dword[cg->rbp + src2_offs]);
+	cg->mov(cg->dword[cg->rbp + dst_offs], reg_val);
+	cg->mov(reg_val, cg->dword[cg->rbp + src1_offs]);
+	cg->mov(cg->dword[cg->rbp + dst_offs + 8], reg_val);
+}
+
+void EE_JIT::Emitter::EmitPSUBB(IRInstruction i)
+{
+	Xbyak::Xmm reg1 = Xbyak::Xmm(reg_alloc->AllocHostXMMRegister());
+	Xbyak::Xmm reg2 = Xbyak::Xmm(reg_alloc->AllocHostXMMRegister());
+	auto reg1_offset = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[0].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u64)));
+	auto reg2_offset = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[1].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u64)));
+	auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[2].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u64)));
+
+	cg->movaps(reg1, cg->ptr[cg->rbp + reg1_offset]);
+	cg->movaps(reg2, cg->ptr[cg->rbp + reg2_offset]);
+
+	cg->psubb(reg1, reg2);
+	cg->movaps(cg->ptr[cg->rbp + dest_offset], reg1);
+}
+
+void EE_JIT::Emitter::EmitPADDSB(IRInstruction i)
+{
+	Xbyak::Xmm reg1 = Xbyak::Xmm(reg_alloc->AllocHostXMMRegister());
+	Xbyak::Xmm reg2 = Xbyak::Xmm(reg_alloc->AllocHostXMMRegister());
+	auto reg1_offset = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[0].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u64)));
+	auto reg2_offset = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[1].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u64)));
+	auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs)) + (i.args[2].GetReg() * sizeof(uint128_t) + offsetof(uint128_t, u64)));
+
+	cg->movaps(reg1, cg->ptr[cg->rbp + reg1_offset]);
+	cg->movaps(reg2, cg->ptr[cg->rbp + reg2_offset]);
+
+	cg->paddsb(reg1, reg2);
+
+	cg->movaps(cg->ptr[cg->rbp + dest_offset], reg1);
+}
+
+void EE_JIT::Emitter::EmitPNOR(IRInstruction i)
+{
+	Xbyak::Xmm src1 = Xbyak::Xmm(reg_alloc->AllocHostXMMRegister());
+	Xbyak::Xmm src2 = Xbyak::Xmm(reg_alloc->AllocHostXMMRegister());
+	Xbyak::Xmm tmp = Xbyak::Xmm(reg_alloc->AllocHostXMMRegister());
+	auto reg1_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[1].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u128)));
+	auto reg2_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[2].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u128)));
+	auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u128)));
+	
+	cg->movaps(src1, cg->ptr[cg->rbp + reg1_offset]);
+	cg->movaps(src2, cg->ptr[cg->rbp + reg2_offset]);
+
+	cg->pcmpeqd(tmp, tmp);
+	cg->pxor(src2, tmp);
+
+	cg->por(src1, src2);
+
+	cg->movaps(cg->ptr[cg->rbp + dest_offset], src1);
+}
+
+void EE_JIT::Emitter::EmitPAND(IRInstruction i)
+{
+	Xbyak::Xmm src1 = Xbyak::Xmm(reg_alloc->AllocHostXMMRegister());
+	Xbyak::Xmm src2 = Xbyak::Xmm(reg_alloc->AllocHostXMMRegister());
+	Xbyak::Xmm tmp = Xbyak::Xmm(reg_alloc->AllocHostXMMRegister());
+	auto reg1_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[1].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u128)));
+	auto reg2_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[2].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u128)));
+	auto dest_offset = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u128)));
+	
+	cg->movaps(src1, cg->ptr[cg->rbp + reg1_offset]);
+	cg->movaps(src2, cg->ptr[cg->rbp + reg2_offset]);
+
+	cg->pand(src1, src2);
+
+	cg->movaps(cg->ptr[cg->rbp + dest_offset], src1);
+}
+
+void EE_JIT::Emitter::EmitPCPYUD(IRInstruction i)
+{
+	Xbyak::Reg64 reg_val = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	auto src1_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64) + sizeof(uint64_t)));
+	auto src2_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[1].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64) + sizeof(uint64_t)));
+	auto dst_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[2].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
+	
+	cg->mov(reg_val, cg->dword[cg->rbp + src2_offs]);
+	cg->mov(cg->dword[cg->rbp + dst_offs], reg_val);
+	cg->mov(reg_val, cg->dword[cg->rbp + src1_offs]);
+	cg->mov(cg->dword[cg->rbp + dst_offs + 8], reg_val);
+}
+
+bool GetCPCOND0()
+{
+	return DMAC::GetCPCOND0();
+}
+
+void EE_JIT::Emitter::EmitBC0T(IRInstruction i)
+{
+	Xbyak::Reg64 tmp = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg32 pc = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+
+	Xbyak::Label condition_failed;
+	Xbyak::Label end;
+	
+	cg->mov(tmp, reinterpret_cast<uint64_t>(GetCPCOND0));
+	cg->call(tmp);
+	cg->test(cg->al, cg->al);
+	cg->je(end);
+	cg->mov(pc, cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, pc)]);
+	cg->add(pc, i.args[0].GetImm());
+	cg->mov(cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)], pc);
+	
+	cg->L(end);
+}
+
+void EE_JIT::Emitter::EmitBC0F(IRInstruction i)
+{
+	Xbyak::Reg64 tmp = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg32 pc = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+
+	Xbyak::Label condition_failed;
+	Xbyak::Label end;
+	
+	cg->mov(tmp, reinterpret_cast<uint64_t>(GetCPCOND0));
+	cg->call(tmp);
+	cg->test(cg->al, cg->al);
+	cg->jne(end);
+	cg->mov(pc, cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, pc)]);
+	cg->add(pc, i.args[0].GetImm());
+	cg->mov(cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)], pc);
+	
+	cg->L(end);
+}
+
+void EE_JIT::Emitter::EmitPCPYH(IRInstruction i)
+{
+	Xbyak::Reg16 reg_val = Xbyak::Reg16(reg_alloc->AllocHostRegister());
+	auto src1_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
+	auto dst_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[1].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u64)));
+	
+	cg->mov(reg_val, cg->word[cg->rbp+src1_offs]);
+	for (int i = 0; i < 4; i++)
+		cg->mov(cg->word[cg->rbp+dst_offs+(i*2)], reg_val);
+	cg->mov(reg_val, cg->word[cg->rbp+src1_offs+sizeof(uint64_t)]);
+	for (int i = 0; i < 4; i++)
+		cg->mov(cg->word[cg->rbp+dst_offs+sizeof(uint64_t)+(i*2)], reg_val);
+}
+
+void EE_JIT::Emitter::EmitCFC2(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	auto dst_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+
+	cg->mov(cg->rdi, i.args[1].GetReg());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::ReadControl));
+	cg->mov(cg->dword[cg->rbp+dst_offs], cg->eax);
+}
+
+void EE_JIT::Emitter::EmitCTC2(IRInstruction i)
+{
+	reg_alloc->MarkRegUsed(RegisterAllocator::RDI);
+	reg_alloc->MarkRegUsed(RegisterAllocator::RSI);
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	auto src_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+
+	cg->mov(cg->rdi, i.args[1].GetReg());
+	cg->mov(cg->esi, cg->dword[cg->rbp+src_offs]);
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::WriteControl));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitVISWR(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::Viswr));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitQMFC2(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	auto dst_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+
+	cg->mov(cg->rdi, i.args[1].GetReg());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::ReadReg));
+	cg->mov(cg->qword[cg->rbp+dst_offs], cg->rax);
+	cg->mov(cg->qword[cg->rbp+dst_offs+sizeof(uint64_t)], cg->rdx);
+}
+
+void EE_JIT::Emitter::EmitQMTC2(IRInstruction i)
+{
+	reg_alloc->MarkRegUsed(RegisterAllocator::RDI);
+	reg_alloc->MarkRegUsed(RegisterAllocator::RSI);
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	auto src_offs = ((offsetof(EmotionEngine::ProcessorState, regs) + (i.args[0].GetReg() * sizeof(uint128_t)) + offsetof(uint128_t, u32)));
+
+	cg->mov(cg->rdi, i.args[1].GetReg());
+	cg->mov(cg->rsi, cg->qword[cg->rbp+src_offs]);
+	cg->mov(cg->rdx, cg->qword[cg->rbp+src_offs+sizeof(uint64_t)]);
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::WriteReg));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitVSUB(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::Vsub));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitVSQI(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::Vsqi));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitVIADD(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::Viadd));
+	cg->call(fptr);
+}
+
+void DoADDAS(uint32_t instr)
+{
+	auto state = EmotionEngine::GetState();
+
+	uint8_t ft = (instr >> 16) & 0x1F;
+	uint8_t fs = (instr >> 11) & 0x1F;
+
+	state->acc.f = convert(state->fprs[fs].i) + convert(state->fprs[ft].i);
+}
+
+void EE_JIT::Emitter::EmitADDA(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(DoADDAS));
+	cg->call(fptr);
+}
+
+void DoMADD(uint32_t instr)
+{
+	uint8_t rs = (instr >> 21) & 0x1F;
+	uint8_t rt = (instr >> 16) & 0x1F;
+	uint8_t rd = (instr >> 11) & 0x1F;
+
+	uint64_t res = ((int32_t)EmotionEngine::GetState()->regs[rs].u32[0]) * ((int32_t)EmotionEngine::GetState()->regs[rt].u32[0]);
+	uint64_t hilo = (EmotionEngine::GetState()->hi << 32) | EmotionEngine::GetState()->lo;
+
+	res += hilo;
+
+	EmotionEngine::GetState()->hi = (res >> 32);
+	EmotionEngine::GetState()->lo = EmotionEngine::GetState()->regs[rd].u32[0] = (res & 0xffffffff);
+}
+
+void EE_JIT::Emitter::EmitMADD(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(DoMADD));
+	cg->call(fptr);
+}
+
+void DoMADDS(uint32_t instr)
+{
+	uint8_t ft = (instr >> 16) & 0x1F;
+	uint8_t fs = (instr >> 11) & 0x1F;
+	uint8_t fd = (instr >> 6) & 0x1F;
+
+	auto state = EmotionEngine::GetState();
+
+	state->fprs[fd].f = convert(state->acc.u) + (convert(state->fprs[fs].i) * convert(state->fprs[ft].i));
+}
+
+void EE_JIT::Emitter::EmitMADDS(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(DoMADDS));
+	cg->call(fptr);
+}
+
+void DoCVTS(uint32_t instr)
+{
+	uint8_t fs = (instr >> 11) & 0x1F;
+	uint8_t fd = (instr >> 6) & 0x1F;
+
+	auto state = EmotionEngine::GetState();
+	
+	if ((state->fprs[fs].i & 0x7F800000) <= 0x4E800000)
+		state->fprs[fd].s = (int32_t)state->fprs[fs].f;
+	else if ((state->fprs[fs].i & 0x80000000) == 0)
+		state->fprs[fd].i = 0x7FFFFFFF;
+	else
+		state->fprs[fd].i = 0x80000000;
+}
+
+void EE_JIT::Emitter::EmitCVTS(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(DoCVTS));
+	cg->call(fptr);
+}
+
+void DoMULS(uint32_t instr)
+{
+	uint8_t ft = (instr >> 16) & 0x1F;
+	uint8_t fs = (instr >> 11) & 0x1F;
+	uint8_t fd = (instr >> 6) & 0x1F;
+
+	auto state = EmotionEngine::GetState();
+
+	state->fprs[fd].f = state->fprs[fs].f * state->fprs[ft].f;
+}
+
+void EE_JIT::Emitter::EmitMULS(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(DoMULS));
+	cg->call(fptr);
+}
+
+void DoCVTW(uint32_t instr)
+{
+	uint8_t fs = (instr >> 11) & 0x1F;
+	uint8_t fd = (instr >> 6) & 0x1F;
+
+	auto state = EmotionEngine::GetState();
+	
+	state->fprs[fd].f = (float)state->fprs[fs].s;
+	state->fprs[fd].f = convert(state->fprs[fd].i);
+}
+
+void EE_JIT::Emitter::EmitCVTW(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(DoCVTW));
+	cg->call(fptr);
+}
+
+void DoDIVS(uint32_t instr)
+{
+	uint8_t ft = (instr >> 16) & 0x1F;
+	uint8_t fs = (instr >> 11) & 0x1F;
+	uint8_t fd = (instr >> 6) & 0x1F;
+
+	auto state = EmotionEngine::GetState();
+
+	if ((state->fprs[ft].i & 0x7F800000) == 0)
+		state->fprs[fd].i = ((state->fprs[fs].i ^ state->fprs[ft].i) & 0x80000000) | 0x7F7FFFFF;
+	else
+		state->fprs[fd].f = convert(state->fprs[fs].i) / convert(state->fprs[ft].i);
+}
+
+void EE_JIT::Emitter::EmitDIVS(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(DoDIVS));
+	cg->call(fptr);
+}
+
+void DoMOVS(uint32_t instr)
+{
+	uint8_t fs = (instr >> 11) & 0x1F;
+	uint8_t fd = (instr >> 6) & 0x1F;
+
+	auto state = EmotionEngine::GetState();
+
+	state->fprs[fd].i = state->fprs[fs].i;
+}
+
+void EE_JIT::Emitter::EmitMOVS(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(DoMOVS));
+	cg->call(fptr);
+}
+
+void DoADDS(uint32_t instr)
+{
+	uint8_t ft = (instr >> 16) & 0x1F;
+	uint8_t fs = (instr >> 11) & 0x1F;
+	uint8_t fd = (instr >> 6) & 0x1F;
+
+	auto state = EmotionEngine::GetState();
+
+	state->fprs[fd].f = (convert(state->fprs[fs].i) + convert(state->fprs[ft].i));
+}
+
+void EE_JIT::Emitter::EmitADDS(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(DoADDS));
+	cg->call(fptr);
+}
+
+void DoSUBS(uint32_t instr)
+{
+	uint8_t ft = (instr >> 16) & 0x1F;
+	uint8_t fs = (instr >> 11) & 0x1F;
+	uint8_t fd = (instr >> 6) & 0x1F;
+
+	auto state = EmotionEngine::GetState();
+
+	state->fprs[fd].f = (convert(state->fprs[fs].i) - convert(state->fprs[ft].i));
+}
+
+void EE_JIT::Emitter::EmitSUBS(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(DoSUBS));
+	cg->call(fptr);
+}
+
+void DoNEGS(uint32_t instr)
+{
+	uint8_t fs = (instr >> 11) & 0x1F;
+	uint8_t fd = (instr >> 6) & 0x1F;
+
+	auto state = EmotionEngine::GetState();
+
+	state->fprs[fd].i = state->fprs[fs].i ^ 0x80000000;
+}
+
+void EE_JIT::Emitter::EmitNEGS(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(DoNEGS));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitLQC2(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::LQC2));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitSQC2(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::SQC2));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitVMULAX(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::Vmulax));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitVMADDAX(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::Vmaddax));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitVMADDAY(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::Vmadday));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitVMADDAZ(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::Vmaddaz));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitVMADDW(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::Vmaddw));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitVMADDZ(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::Vmaddz));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitVMULAW(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::Vmulaw));
+	cg->call(fptr);
+}
+
+void EE_JIT::Emitter::EmitVCLIPW(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(VectorUnit::VU0::Vclipw));
+	cg->call(fptr);
+}
+
+void DoCLES(uint32_t instr)
+{
+	uint8_t ft = (instr >> 16) & 0x1F;
+	uint8_t fs = (instr >> 11) & 0x1F;
+
+	if (convert(EmotionEngine::GetState()->fprs[fs].i) <= convert(EmotionEngine::GetState()->fprs[ft].i))
+		EmotionEngine::GetState()->c = 1;
+	else
+		EmotionEngine::GetState()->c = 0;
+}
+
+void EE_JIT::Emitter::EmitCLES(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(DoCLES));
+	cg->call(fptr);
+}
+
+void DoCEQS(uint32_t instr)
+{
+	uint8_t ft = (instr >> 16) & 0x1F;
+	uint8_t fs = (instr >> 11) & 0x1F;
+
+	if (convert(EmotionEngine::GetState()->fprs[fs].i) == convert(EmotionEngine::GetState()->fprs[ft].i))
+		EmotionEngine::GetState()->c = 1;
+	else
+		EmotionEngine::GetState()->c = 0;
+}
+
+void EE_JIT::Emitter::EmitCEQS(IRInstruction i)
+{
+	Xbyak::Reg64 fptr = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	cg->mov(cg->rdi, i.args[0].GetImm());
+	cg->mov(fptr, reinterpret_cast<uint64_t>(DoCEQS));
+	cg->call(fptr);
+}
+
+bool GetFPUC()
+{
+	return EmotionEngine::GetState()->c;
+}
+
+void EE_JIT::Emitter::EmitBC1F(IRInstruction i)
+{	
+	Xbyak::Reg64 tmp = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg32 pc = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+
+	Xbyak::Label condition_failed;
+	Xbyak::Label end;
+	
+	cg->mov(tmp, reinterpret_cast<uint64_t>(GetFPUC));
+	cg->call(tmp);
+	cg->test(cg->al, cg->al);
+	cg->jne(end);
+	cg->mov(pc, cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, pc)]);
+	cg->add(pc, i.args[0].GetImm());
+	cg->mov(cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)], pc);
+	
+	cg->L(end);
+}
+
+void EE_JIT::Emitter::EmitBC1T(IRInstruction i)
+{
+	Xbyak::Reg64 tmp = Xbyak::Reg64(reg_alloc->AllocHostRegister());
+	Xbyak::Reg32 pc = Xbyak::Reg32(reg_alloc->AllocHostRegister());
+
+	Xbyak::Label condition_failed;
+	Xbyak::Label end;
+	
+	cg->mov(tmp, reinterpret_cast<uint64_t>(GetFPUC));
+	cg->call(tmp);
+	cg->test(cg->al, cg->al);
+	cg->je(end);
+	cg->mov(pc, cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, pc)]);
+	cg->add(pc, i.args[0].GetImm());
+	cg->mov(cg->dword[cg->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)], pc);
+	
 	cg->L(end);
 }
 
@@ -1444,9 +2219,221 @@ void EE_JIT::Emitter::EmitIR(IRInstruction i)
 	case SYSCALL:
 		EmitSyscall(i);
 		break;
+	case PLZCW:
+		EmitPLZCW(i);
+		break;
+	case PMFHI:
+		EmitPMFHI(i);
+		break;
+	case PMFLO:
+		EmitPMFLO(i);
+		break;
+	case MTLO:
+		EmitMTLO(i);
+		break;
+	case MTHI:
+		EmitMTHI(i);
+		break;
+	case PCPYLD:
+		EmitPCPYLD(i);
+		break;
+	case PSUBB:
+		EmitPSUBB(i);
+		break;
+	case PNOR:
+		EmitPNOR(i);
+		break;
+	case PAND:
+		EmitPAND(i);
+		break;
+	case PCPYUD:
+		EmitPCPYUD(i);
+		break;
+	case BC0T:
+		EmitBC0T(i);
+		break;
+	case BC0F:
+		EmitBC0F(i);
+		break;
+	case PCPYH:
+		EmitPCPYH(i);
+		break;
+	case CFC2:
+		EmitCFC2(i);
+		break;
+	case CTC2:
+		EmitCTC2(i);
+		break;
+	case VISWR:
+		EmitVISWR(i);
+		break;
+	case QMFC2:
+		EmitQMFC2(i);
+		break;
+	case QMTC2:
+		EmitQMTC2(i);
+		break;
+	case VSUB:
+		EmitVSUB(i);
+		break;
+	case VSQI:
+		EmitVSQI(i);
+		break;
+	case VIADD:
+		EmitVIADD(i);
+		break;
+	case ADDAS:
+		EmitADDA(i);
+		break;
+	case PADDSB:
+		EmitPADDSB(i);
+		break;
+	case MADD:
+		EmitMADD(i);
+		break;
+	case MADDS:
+		EmitMADDS(i);
+		break;
+	case CVTS:
+		EmitCVTS(i);
+		break;
+	case CVTW:
+		EmitCVTW(i);
+		break;
+	case MULS:
+		EmitMULS(i);
+		break;
+	case DIVS:
+		EmitDIVS(i);
+		break;
+	case MOVS:
+		EmitMOVS(i);
+		break;
+	case ADDS:
+		EmitADDS(i);
+		break;
+	case SUBS:
+		EmitSUBS(i);
+		break;
+	case NEGS:
+		EmitNEGS(i);
+		break;
+	case LQC2:
+		EmitLQC2(i);
+		break;
+	case SQC2:
+		EmitSQC2(i);
+		break;
+	case VMULAX:
+		EmitVMULAX(i);
+		break;
+	case VMADDAZ:
+		EmitVMADDAZ(i);
+		break;
+	case VMADDAY:
+		EmitVMADDAY(i);
+		break;
+	case VMADDW:
+		EmitVMADDW(i);
+		break;
+	case VMADDZ:
+		EmitVMADDZ(i);
+		break;
+	case VMADDAX:
+		EmitVMADDAX(i);
+		break;
+	case VMULAW:
+		EmitVMULAW(i);
+		break;
+	case VCLIPW:
+		EmitVCLIPW(i);
+		break;
+	case CLES:
+		EmitCLES(i);
+		break;
+	case BC1F:
+		EmitBC1F(i);
+		break;
+	case BC1T:
+		EmitBC1T(i);
+		break;
+	case CEQS:
+		EmitCEQS(i);
+		break;
 	default:
 		printf("[JIT/Emit]: Unknown IR instruction %d\n", i.instr);
 		exit(1);
+	}
+}
+
+
+
+union COP0CAUSE
+{
+	uint32_t value;
+	struct
+	{
+		uint32_t : 2;
+		uint32_t excode : 5;	/* Exception Code */
+		uint32_t : 3;
+		uint32_t ip0_pending : 1;
+		uint32_t ip1_pending : 1;
+		uint32_t siop : 1;
+		uint32_t : 2;
+		uint32_t timer_ip_pending : 1;
+		uint32_t exc2 : 3;
+		uint32_t : 9;
+		uint32_t ce : 2;
+		uint32_t bd2 : 1;
+		uint32_t bd : 1;
+	};
+};
+
+union COP0Status
+{
+    uint32_t value;
+    struct
+    {
+        uint32_t ie : 1; /* Interrupt Enable */
+        uint32_t exl : 1; /* Exception Level */
+        uint32_t erl : 1; /* Error Level */
+        uint32_t ksu : 2; /* Kernel/Supervisor/User Mode bits */
+        uint32_t : 5;
+        uint32_t im0 : 1; /* Int[1:0] signals */
+        uint32_t im1 : 1;
+        uint32_t bem : 1; /* Bus Error Mask */
+        uint32_t : 2;
+        uint32_t im7 : 1; /* Internal timer interrupt  */
+        uint32_t eie : 1; /* Enable IE */
+        uint32_t edi : 1; /* EI/DI instruction Enable */
+        uint32_t ch : 1; /* Cache Hit */
+        uint32_t : 3;
+        uint32_t bev : 1; /* Location of TLB refill */
+        uint32_t dev : 1; /* Location of Performance counter */
+        uint32_t : 2;
+        uint32_t fr : 1; /* Additional floating point registers */
+        uint32_t : 1;
+        uint32_t cu : 4; /* Usability of each of the four coprocessors */
+    };
+};
+
+void CheckInterrupts()
+{
+	COP0Status status;
+	COP0CAUSE cause;
+
+	status.value = EmotionEngine::GetState()->cop0_regs[12];
+	cause.value = EmotionEngine::GetState()->cop0_regs[13];
+
+	bool int_enabled = (status.eie && status.ie && !status.erl && !status.exl);
+
+	bool pending = (cause.ip0_pending && status.im0) ||
+					(cause.ip1_pending && status.im1) ||
+					(cause.timer_ip_pending && status.im7);
+	
+	if (int_enabled && pending)
+	{
+		EmotionEngine::Exception(0x00);
 	}
 }
 
@@ -1553,7 +2540,7 @@ EE_JIT::Emitter::Emitter()
 	Xbyak::Label block_compiled;
 
 	cg->cmp(cg->dword[cg->rsp + 20], 20);
-	cg->je(block_compiled);
+	cg->jge(block_compiled);
 	cg->mov(isBranchDelayed, cg->dword[cg->rsp + 8]);
 	cg->cmp(isBranchDelayed, 1);
 	cg->jge(block_compiled);
@@ -1571,6 +2558,8 @@ EE_JIT::Emitter::Emitter()
 	cg->mov(cg->edi, cg->dword[cg->rsp + 20]);
 	cg->mov(func_ptr, reinterpret_cast<uint64_t>(Scheduler::CheckScheduler));
 	cg->call(func_ptr);
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(CheckInterrupts));
+	cg->call(func_ptr);
 
 	cg->jmp(begin);
 
@@ -1586,6 +2575,8 @@ EE_JIT::Emitter::Emitter()
 	cg->call(func_ptr);
 	cg->mov(cg->rdi, cg->rax);
 	cg->mov(func_ptr, reinterpret_cast<uint64_t>(Scheduler::CheckScheduler));
+	cg->call(func_ptr);
+	cg->mov(func_ptr, reinterpret_cast<uint64_t>(CheckInterrupts));
 	cg->call(func_ptr);
 
 	cg->jmp(begin);
@@ -1631,5 +2622,5 @@ void EE_JIT::Emitter::EnterDispatcher()
 
 uint8_t *EE_JIT::Emitter::GetFreeBase()
 {
-	return cg->getCurr();
+	return (uint8_t*)cg->getCurr();
 }

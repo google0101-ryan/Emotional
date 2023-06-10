@@ -31,6 +31,7 @@ size_t FIFO1_size();
 void WriteFIFO0(uint32_t data);
 void WriteFIFO1(uint32_t data);
 
+uint32_t ReadAndPopSIF0();
 uint32_t ReadAndPopSIF1();
 
 }  // namespace SIF

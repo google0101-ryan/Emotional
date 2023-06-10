@@ -7,8 +7,10 @@
 #include <emu/cpu/iop/dma.h>
 #include <emu/dev/cdvd.h>
 #include <emu/dev/sif.h>
+#include <emu/dev/sio2.h>
 
 #include <cstdint>
+#include <string>
 
 uint32_t Translate(uint32_t addr);
 extern uint8_t* BiosRom;
@@ -20,6 +22,11 @@ namespace Bus
 void LoadBios(uint8_t* data);
 
 void Dump();
+
+uint8_t* GetRamPtr();
+uint8_t* GetSprPtr();
+uint8_t* GetPtrForAddress(uint32_t addr);
+
 
 uint128_t Read128(uint32_t addr);
 uint64_t Read64(uint32_t addr);
@@ -34,6 +41,9 @@ void Write16(uint32_t addr, uint16_t data);
 void Write8(uint32_t addr, uint8_t data);
 
 extern uint32_t I_MASK, I_STAT, I_CTRL;
+extern uint32_t spu2_stat;
+
+uint32_t LoadElf(std::string name);
 
 template<typename T>
 T iop_read(uint32_t addr)
@@ -98,6 +108,30 @@ T iop_read(uint32_t addr)
 	case 0x1f801540 ... 0x1f80154C:
 	case 0x1f801550 ... 0x1f80155C:
 		return IopDma::ReadNewChannel(addr);
+	case 0x1f402018:
+		return CDVD::ReadSResult();
+	case 0x1f402017:
+		return CDVD::ReadSStatus();
+	case 0x1f402016:
+		return CDVD::ReadSCommand();
+	case 0x1f900744:
+	{
+		uint16_t copy = spu2_stat;
+		spu2_stat &= ~0x80;
+		return copy;
+	}
+	case 0x1f900000 ... 0x1f900743:
+	case 0x1f900745 ... 0x1f900780:
+	case 0x1f900b60 ... 0x1f900B70:
+		return 0;
+	case 0x1f801080 ... 0x1f80108C:
+	case 0x1f801090 ... 0x1f80109C:
+	case 0x1f8010A0 ... 0x1f8010AC:
+	case 0x1f8010B0 ... 0x1f8010BC:
+	case 0x1f8010C0 ... 0x1f8010CC:
+	case 0x1f8010D0 ... 0x1f8010DC:
+	case 0x1f8010E0 ... 0x1f8010EC:
+		return IopDma::ReadChannel(addr);
 	}
 
 	printf("[emu/IopBus]: Read from unknown addr 0x%08x\n", addr);
@@ -157,6 +191,9 @@ void iop_write(uint32_t addr, T data)
 	case 0x1ffe0130:
 	case 0x1ffe0140:
 		return;
+	case 0x1f900000 ... 0x1f900800:
+	case 0x1f900b60 ... 0x1f900B70:
+		return;
 	case 0x1ffe0144:
 		printf("[emu/IOP]: Scratchpad start 0x%08x\n", data);
 		return;
@@ -167,7 +204,7 @@ void iop_write(uint32_t addr, T data)
 		I_MASK = data;
 		return;
 	case 0x1f801078:
-		I_CTRL = data;
+		I_CTRL = data & 1;
 		return;
 	case 0x1f8010f0:
 		IopDma::WriteDPCR(data);
@@ -209,15 +246,24 @@ void iop_write(uint32_t addr, T data)
 	case 0x1F801490 ... 0x1F801498:
 	case 0x1F8014A0 ... 0x1F8014A8:
 		return;
+	case 0x1f402016:
+		CDVD::AddSCommand(data & 0xff);
+		return;
+	case 0x1f808268:
+		SIO2::WriteCtrl(data);
+		return;
 	}
 
-	printf("[emu/IopBus]: Write to unknown addr 0x%08x\n", addr);
+	printf("[emu/IopBus]: Write 0x%08x to unknown addr 0x%08x\n", data, addr);
 	exit(1);
 }
 
 inline void TriggerIOPInterrupt(int i_num)
 {
+	printf("[emu/IOP]: Trigerring interrupt %d\n", i_num);
 	I_STAT |= (1 << i_num);
 }
+
+void TriggerEEInterrupt(int i_num);
 
 }  // namespace Bus

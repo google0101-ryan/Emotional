@@ -6,13 +6,12 @@
 #include <emu/cpu/iop/cpu.h>
 
 #include <cstring>
+#include "cpu.h"
 
 uint32_t exception_addr[2] = { 0x80000080, 0xBFC00180 };
 
 void CPU::exception(Exception cause, uint32_t cop)
 {
-	// printf("[IOP] Exception of type %d\n", (int)cause);
-
 	uint32_t mode = Cop0.status.value;
 	Cop0.status.value &= ~(uint32_t)0x3F;
 	Cop0.status.value |= (mode << 2) & 0x3F;
@@ -119,17 +118,12 @@ void CPU::load(uint32_t regN, uint32_t value)
 	delayed_memory_load.data = value;
 }
 
-void CPU::Clock(int cycles)
+void CPU::Clock(uint64_t cycles)
 {
-    for (int cycle = cycles; cycle > 0; cycle--)
-    {
-        if (singleStep)
-		{
-        	getc(stdin);
-		}
-		
+    for (uint64_t cycle = 0; cycle < cycles; cycle++)
+    {	
 		i = next_instr;
-        
+
 		if (i.pc == 0x12C48 || i.pc == 0x1420C || i.pc == 0x1230C)
 		{
 			uint32_t ptr = regs[5];
@@ -206,10 +200,8 @@ void CPU::Clock(int cycles)
 		last_instruction_was_lwr = false;
 	}
 
-    if (IntPending())
-    {
+	if (IntPending())
 		exception(Exception::Interrupt);
-    }
 }
 
 void CPU::Dump()
@@ -217,6 +209,8 @@ void CPU::Dump()
     for (int i = 0; i < 32; i++)
         printf("[emu/IOP]: %s: %s\t->\t0x%08x\n", __FUNCTION__, Reg(i), regs[i]);
     printf("[emu/IOP]: %s: pc\t->\t0x%08x\n", __FUNCTION__, pc - 4);
+	printf("[emu/IOP]: COP0_Cause: 0x%08x\n", Cop0.cause.value);
+	printf("[emu/IOP]: COP0_Status: 0x%08x\n", Cop0.status.value);
 }
 
 bool CPU::IntPending()
@@ -225,12 +219,18 @@ bool CPU::IntPending()
 	Cop0.cause.IP = (Cop0.cause.IP & ~0x4) | (pending << 2);
 
 	bool enabled = Cop0.status.IEc && (Cop0.status.Im & Cop0.cause.IP);
+
 	return pending && enabled;
+}
+
+bool CPU::CanDisassemble()
+{
+    return can_disassemble;
 }
 
 static CPU iop;
 
-void IOP_MANAGEMENT::Clock(int cycles)
+void IOP_MANAGEMENT::Clock(uint64_t cycles)
 {
 	iop.Clock(cycles);
 }
@@ -242,5 +242,10 @@ void IOP_MANAGEMENT::Reset()
 
 void IOP_MANAGEMENT::Dump()
 {
-	iop.Dump();
+    iop.Dump();
+}
+
+bool IOP_MANAGEMENT::CanDisassemble()
+{
+    return iop.CanDisassemble();
 }

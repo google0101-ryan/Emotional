@@ -16,6 +16,7 @@
 
 #include <emu/gpu/gif.hpp>
 #include <emu/cpu/ee/dmac.hpp>
+#include "Bus.h"
 
 uint8_t* BiosRom;
 uint8_t spr[0x4000];
@@ -27,6 +28,7 @@ uint32_t rdram_sdevid;
 
 uint32_t INTC_MASK = 0, INTC_STAT = 0;
 uint32_t Bus::I_MASK = 0, Bus::I_STAT = 0, Bus::I_CTRL = 0;
+uint32_t Bus::spu2_stat = 0;
 
 uint32_t Translate(uint32_t addr)
 {
@@ -61,6 +63,8 @@ void Bus::LoadBios(uint8_t *data)
 
 	memcpy(BiosRom, data, 0x400000);
 	console.open("console.txt");
+
+	GS::Initialize();
 }
 
 void Bus::Dump()
@@ -91,6 +95,36 @@ void Bus::Dump()
 	}
 
 	dump.close();
+
+	printf("[emu/Bus]: IOP_ISTAT: 0x%08x, IOP_IMASK: 0x%08x\n", I_STAT, I_MASK);
+}
+
+uint8_t *Bus::GetRamPtr()
+{
+    return ram;
+}
+
+uint8_t *Bus::GetSprPtr()
+{
+    return spr;
+}
+
+uint8_t *Bus::GetPtrForAddress(uint32_t addr)
+{
+	addr = Translate(addr);
+
+	if (addr < 0x10000000)
+	{
+		addr &= (1024*1024*32)-1;
+		return ram+addr;
+	}
+	if (addr >= 0x1FC00000 && addr < 0x20000000)
+	{
+		addr &= (1024*1024*4)-1;
+		return BiosRom+addr;
+	}
+
+	return nullptr;
 }
 
 uint128_t Bus::Read128(uint32_t addr)
@@ -99,6 +133,8 @@ uint128_t Bus::Read128(uint32_t addr)
 
 	if (addr < 0x2000000)
 		return {*reinterpret_cast<__uint128_t*>(&ram[addr])};
+	if (addr >= 0x1C000000 && addr < 0x1C200000)
+		return {*reinterpret_cast<__uint128_t*>(&iop_ram[addr-0x1C000000])};
 
 	printf("Read128 from unknown address 0x%08x\n", addr);
 	exit(1);
@@ -114,6 +150,14 @@ uint64_t Bus::Read64(uint32_t addr)
 		return *reinterpret_cast<uint64_t*>(&spr[addr - 0x70000000]);
 	if (addr < 0x2000000)
 		return *reinterpret_cast<uint64_t*>(&ram[addr]);
+	if (addr >= 0x1C000000 && addr < 0x1C200000)
+		return *reinterpret_cast<uint64_t*>(&iop_ram[addr-0x1C000000]);
+	
+	switch (addr)
+	{
+	case 0x12001000:
+		return GS::ReadGSCSR();
+	}
 
 	printf("Read64 from unknown address 0x%08x\n", addr);
 	exit(1);
@@ -194,6 +238,18 @@ uint32_t Bus::Read32(uint32_t addr)
 		return SIF::ReadSMFLG();
 	case 0x1000F520:
 		return DMAC::ReadDENABLE();
+	case 0x1000A000:
+	case 0x1000A010:
+	case 0x1000A030:
+	case 0x1000A040:
+	case 0x1000A050:
+	case 0x1000A080:
+		return DMAC::ReadGIFChannel(addr);
+	case 0x12001000:
+		return GS::ReadGSCSR() & 0xffffffff;
+	case 0x10001000:
+	case 0x10001010:
+	case 0x10001810:
 	case 0x10002010:
 		return 0;
 	}
@@ -239,6 +295,8 @@ uint8_t Bus::Read8(uint32_t addr)
 		return spr[addr - 0x70000000];
 	if (addr < 0x2000000)
 		return ram[addr];
+	if (addr >= 0x1C000000 && addr < 0x1C200000)
+		return iop_ram[addr-0x1C000000];
 
 	switch (addr)
 	{
@@ -330,6 +388,9 @@ void Bus::Write64(uint32_t addr, uint64_t data)
 	case 0x12001000:
 		GS::WriteGSCSR(data);
 		return;
+	case 0x12000000:
+		GS::WriteGSPMODE(data);
+		return;
 	case 0x12000010:
 		GS::WriteGSSMODE1(data);
 		return;
@@ -347,6 +408,27 @@ void Bus::Write64(uint32_t addr, uint64_t data)
 		return;
 	case 0x12000060:
 		GS::WriteGSSYNCV(data);
+		return;
+	case 0x12000070:
+		GS::WriteDISPFB1(data);
+		return;
+	case 0x12000080:
+		GS::WriteDISPLAY1(data);
+		return;
+	case 0x12000090:
+		GS::WriteDISPFB2(data);
+		return;
+	case 0x120000A0:
+		GS::WriteDISPLAY2(data);
+		return;
+	case 0x120000E0:
+		GS::WriteBGCOLOR(data);
+		return;
+	case 0x12001010:
+		GS::WriteIMR(data);
+		return;
+	case 0x10000800: // Timer 1
+	case 0x10000810:
 		return;
 	}
 
@@ -397,9 +479,11 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 	case 0x1f80141c:
 		return;
 	case 0x1000f000:
+		printf("Writing 0x%08x to INTC_STAT\n", data);
 		INTC_STAT &= ~(data);
 		return;
 	case 0x1000f010:
+		printf("Writing 0x%08x to INTC_MASK\n", data);
 		INTC_MASK = data;
 		return;
 	case 0x1000f500:  // EE TLB enable?
@@ -459,6 +543,7 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 		return;
 	case 0x1000A000:
 	case 0x1000A010:
+	case 0x1000A020:
 	case 0x1000A030:
 	case 0x1000A040:
 	case 0x1000A050:
@@ -570,6 +655,9 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 	case 0x1000F590:
 		DMAC::WriteDENABLE(data);
 		return;
+	case 0x12001000:
+		GS::WriteGSCSR((GS::ReadGSCSR() & 0xffffffff00000000) | data);
+		return;
 	}
 
 	printf("Write32 0x%08x to unknown address 0x%08x\n", data, addr);
@@ -632,4 +720,79 @@ void Bus::Write8(uint32_t addr, uint8_t data)
 
 	printf("Write8 to unknown address 0x%08x\n", addr);
 	exit(1);
+}
+
+uint32_t Bus::LoadElf(std::string name)
+{
+	struct Elf32_Hdr
+	{
+		uint8_t e_ident[16];
+		uint16_t e_type;
+		uint16_t e_machine;
+		uint32_t e_version;
+		uint32_t e_entry;
+		uint32_t e_phoff;
+		uint32_t e_shoff;
+		uint32_t e_flags;
+		uint16_t e_ehsize;
+		uint16_t e_phentsize;
+		uint16_t e_phnum;
+		uint16_t e_shentsize;
+		uint16_t e_shnum;
+		uint16_t e_shstrndx;
+	};
+
+	struct Elf32_Phdr 
+    {
+        uint32_t p_type;
+        uint32_t p_offset;
+        uint32_t p_vaddr;
+        uint32_t p_paddr;
+        uint32_t p_filesz;
+        uint32_t p_memsz;
+        uint32_t p_flags;
+        uint32_t p_align;
+    };
+
+	std::ifstream reader;
+	reader.open(name, std::ios::in | std::ios::binary);
+
+	reader.seekg(0, std::ios::end);
+	int size = reader.tellg();
+	uint8_t* buffer = new uint8_t[size];
+
+	reader.seekg(0, std::ios::beg);
+	reader.read((char*)buffer, size);
+	reader.close();
+
+	auto header = *(Elf32_Hdr*)&buffer[0];
+    printf("[CORE][ELF] Loading %s\n", name.c_str());
+    printf("Entry: 0x%x\n", header.e_entry);
+    printf("Program header start: 0x%x\n", header.e_phoff);
+    printf("Section header start: 0x%x\n", header.e_shoff);
+    printf("Program header entries: %d\n", header.e_phnum);
+    printf("Section header entries: %d\n", header.e_shnum);
+    printf("Section header names index: %d\n", header.e_shstrndx);
+
+	for (auto i = header.e_phoff; i < header.e_phoff + (header.e_phnum*0x20); i += 0x20)
+	{
+		auto pheader = *(Elf32_Phdr*)&buffer[i];
+
+		int mem_w = pheader.p_paddr;
+		for (auto file_w = pheader.p_offset; file_w < pheader.p_offset+pheader.p_filesz; file_w += 4)
+		{
+			uint32_t word = *(uint32_t*)&buffer[file_w];
+			Write32(mem_w, word);
+			mem_w += 4;
+		}
+	}
+
+	return header.e_entry;
+}
+
+void Bus::TriggerEEInterrupt(int i_num)
+{
+	INTC_STAT |= (1 << i_num);
+	if (INTC_STAT & INTC_MASK)
+		EmotionEngine::SetIp0Pending();
 }

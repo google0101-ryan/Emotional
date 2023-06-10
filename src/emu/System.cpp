@@ -4,14 +4,21 @@
 #include "System.h"
 #include <emu/memory/Bus.h>
 #include <emu/cpu/ee/EmotionEngine.h>
+#include <emu/cpu/ee/ee_interpret.h>
 #include <emu/sched/scheduler.h>
 #include <emu/cpu/ee/vu.h>
 #include <emu/cpu/iop/cpu.h>
+#include <emu/gpu/gs.h>
 
 #include <chrono> // NOLINT [build/c++11]
 #include <iostream>
+#include <ctime>
 
-Scheduler::Event vsync_event;
+std::ofstream fps_file;
+
+Scheduler::Event vblank_start_event;
+Scheduler::Event vblank_end_event;
+Scheduler::Event hblank_event;
 
 std::chrono::steady_clock::time_point first_tp;
 uint64_t frame_count = 0;
@@ -24,6 +31,9 @@ std::chrono::duration<double> uptime()
 	return std::chrono::steady_clock::now() - first_tp;
 }
 
+clock_t current_ticks, delta_ticks;
+clock_t fps_ = 0;
+
 double fps()
 {
 	const double uptime_sec = uptime().count();
@@ -34,11 +44,39 @@ double fps()
 	return frame_count / uptime_sec;
 }
 
-void HandleVsync()
+void HandleVblankStart()
+{
+	Scheduler::ScheduleEvent(vblank_start_event);
+
+	GS::SetVblankStart(true);
+	GS::UpdateOddFrame();
+
+	if (GS::VSIntEnabled())
+		Bus::TriggerEEInterrupt(2);
+}
+
+void HandleVblankEnd()
 {
 	// printf("FPS: %f\n", fps());
-	Scheduler::ScheduleEvent(vsync_event);
 	frame_count++;
+	GS::UpdateFPS(fps());
+
+	Scheduler::ScheduleEvent(vblank_end_event);
+	
+	GS::SetVblankStart(false);
+
+	if (GS::VSIntEnabled())
+		Bus::TriggerEEInterrupt(3);
+}
+
+void HandleHblank()
+{
+	Scheduler::ScheduleEvent(hblank_event);
+
+	GS::SetHblank(true);
+
+	if (GS::HSIntEnabled())
+		Bus::TriggerEEInterrupt(0);
 }
 
 void System::LoadBios(std::string biosName)
@@ -68,27 +106,54 @@ void System::LoadBios(std::string biosName)
 void System::Reset()
 {
 	Scheduler::InitScheduler();
+#ifdef EE_JIT
 	EmotionEngine::Reset();
+#else
+	EEInterpreter::Reset();
+#endif
 
 	IOP_MANAGEMENT::Reset();
 
-	vsync_event.func = HandleVsync;
-	vsync_event.name = "VSYNC handler";
-	vsync_event.cycles_from_now = 4920115;
-	Scheduler::ScheduleEvent(vsync_event);
+	vblank_start_event.func = HandleVblankStart;
+	vblank_start_event.name = "VBLANK start handler";
+	vblank_start_event.cycles_from_now = 4489019;
+	Scheduler::ScheduleEvent(vblank_start_event);
+
+	vblank_end_event.func = HandleVblankEnd;
+	vblank_end_event.name = "VBLANK end handler";
+	vblank_end_event.cycles_from_now = 4920115;
+	Scheduler::ScheduleEvent(vblank_end_event);
+
+	fps_file.open("fps.txt");
 
 	first_tp = std::chrono::steady_clock::now();
 }
 
 void System::Run()
 {
+#ifdef EE_JIT
 	EmotionEngine::Clock();
+#else
+	while (1)
+	{
+		size_t cycles = Scheduler::GetNextTimestamp();
+
+		EEInterpreter::Clock(cycles);
+
+		Scheduler::CheckScheduler(cycles);
+	}
+#endif
 }
 
 void System::Dump()
 {
+#ifdef EE_JIT
 	EmotionEngine::Dump();
+#else
+	EEInterpreter::Dump();
+#endif
 	Bus::Dump();
 	VectorUnit::Dump();
 	IOP_MANAGEMENT::Dump();
+	GS::DumpVram();
 }

@@ -83,6 +83,9 @@ void CPU::op_jal()
     set_reg(31, pc);
 	op_j();
     if (can_disassemble) printf("jal 0x%08x\n", pc);
+
+    if (pc == 0x800)
+        printf("[emu/IOP]: Entered LOADCORE(0x%08x, 0x%08x)\n", regs[4], regs[5]);
 }
 
 void CPU::op_beq()
@@ -597,6 +600,11 @@ void CPU::op_jr()
 	next_instr.is_delay_slot = true;
 	next_instr.branch_taken = true;
     if (can_disassemble && i.r_type.func == 0b001000) printf("jr %s\n", Reg(i.r_type.rs));
+
+    if (pc == 0xBFC4A000)
+    {
+        printf("Called IOPBOOT:_start(%d, %d, 0x%08x, %d)\n", regs[4], regs[5], regs[6], regs[7]);
+    }
 }
 
 void CPU::op_jalr()
@@ -853,7 +861,7 @@ void CPU::op_mtc0()
 
     Cop0.regs[rd] = regs[rt];
  
-	if (can_disassemble) printf("mtc0 %d, %s\n", rd, Reg(rt));
+	if (can_disassemble) printf("mtc0 %d, %s (0x%08x)\n", rd, Reg(rt), regs[rt]);
 }
 
 void CPU::op_rfe()

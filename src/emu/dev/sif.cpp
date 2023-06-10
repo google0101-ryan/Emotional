@@ -4,6 +4,7 @@
 #include <emu/dev/sif.h>
 
 #include <queue>
+#include "sif.h"
 
 uint32_t sif_ctrl;
 uint32_t bd6;
@@ -16,16 +17,19 @@ std::queue<uint32_t> fifo0, fifo1;
 
 void SIF::WriteMSCOM_EE(uint32_t data)
 {
+	printf("[emu/SIF]: Writing 0x%08x to MSCOM_EE\n", data);
 	mscom = data;
 }
 
 void SIF::WriteMSFLG_EE(uint32_t data)
 {
+	printf("[emu/SIF]: Writing 0x%08x to MSFLG_EE\n", data);
 	msflg |= data;
 }
 
 void SIF::WriteSMFLG_EE(uint32_t data)
 {
+	printf("[emu/SIF]: Writing 0x%08x to SMFLG_EE\n", data);
 	smflg &= ~data;
 }
 
@@ -60,16 +64,19 @@ void SIF::WriteCTRL_IOP(uint32_t data)
 
 void SIF::WriteSMCOM_IOP(uint32_t data)
 {
+	printf("[emu/SIF]: Writing 0x%08x to SMCOM_IOP\n", data);
 	smcom = data;
 }
 
 void SIF::WriteSMFLG_IOP(uint32_t data)
 {
+	printf("[emu/SIF]: Writing 0x%08x to SMFLG_IOP\n", data);
 	smflg = data;
 }
 
 void SIF::WriteMSFLG_IOP(uint32_t data)
 {
+	printf("[emu/SIF]: Writing 0x%08x to MSFLG_IOP\n", data);
 	msflg &= ~data;
 }
 
@@ -116,6 +123,14 @@ void SIF::WriteFIFO0(uint32_t data)
 void SIF::WriteFIFO1(uint32_t data)
 {
 	fifo1.push(data);
+}
+
+uint32_t SIF::ReadAndPopSIF0()
+{
+	uint32_t data = fifo0.front();
+	fifo0.pop();
+
+	return data;
 }
 
 uint32_t SIF::ReadAndPopSIF1()

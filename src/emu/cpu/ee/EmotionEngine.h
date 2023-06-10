@@ -52,6 +52,53 @@ enum IRInstrs
 	ERET = 35,
 	SYSCALL = 36,
 	EI = 37,
+	PLZCW = 38,
+	PMFHI = 39,
+	PMFLO = 40,
+	MTHI = 41,
+	MTLO = 42,
+	PCPYLD = 43,
+	PSUBB = 44,
+	PNOR = 45,
+	PAND = 46,
+	PCPYUD = 47,
+	BC0T = 48,
+	BC0F = 49,
+	PCPYH = 50,
+	CFC2 = 51,
+	CTC2 = 52,
+	VISWR = 53,
+	QMFC2 = 54,
+	QMTC2 = 55,
+	VSUB = 56,
+	VSQI = 57,
+	VIADD = 58,
+	ADDAS = 59,
+	PADDSB = 60,
+	MADD = 61,
+	MADDS = 62,
+	CVTS = 63,
+	MULS = 64,
+	CVTW = 65,
+	DIVS = 66,
+	MOVS = 67,
+	ADDS = 68,
+	SUBS = 69,
+	NEGS = 70,
+	LQC2 = 71,
+	VMULAX = 72,
+	VMADDAZ = 73,
+	VMADDAY = 74,
+	VMADDW = 75,
+	SQC2 = 76,
+	VMADDZ = 77,
+	VMADDAX = 78,
+	VMULAW = 79,
+	VCLIPW = 80,
+	CLES = 81,
+	BC1F = 82,
+	CEQS = 83,
+	BC1T = 84,
 };
 
 struct IRValue
@@ -62,6 +109,7 @@ public:
 		Imm,
 		Reg,
 		Cop0Reg,
+		Cop1Reg,
 		Float
 	};
 private:
@@ -80,9 +128,10 @@ public:
 
 	bool IsImm() {return type == Imm;}
 	bool IsCop0() {return type == Cop0Reg;}
+	bool IsCop1() {return type == Cop1Reg;}
 	bool IsReg() {return type == Reg;}
 	bool IsFloat() {return type == Float;}
-	// Can be used for guest and COP0 registers
+	// Can be used for guest, COP0, and COP1 registers
 	void SetReg(uint32_t reg) {value.register_num = reg;}
 	void SetImm(uint16_t imm) {value.imm = (int32_t)(int16_t)imm;}
 	void SetImm32(uint32_t imm) {value.imm = imm;}
@@ -180,6 +229,7 @@ private:
 	void EmitBNE(uint32_t instr, EE_JIT::IRInstruction& i);  // 0x05
 	void EmitBLEZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x06
 	void EmitBGTZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x06
+	void EmitADDI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x08
 	void EmitADDIU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x09
 	void EmitSLTI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0A
 	void EmitSLTIU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0B
@@ -206,8 +256,11 @@ private:
 	void EmitSW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2B
 	void EmitSDL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2C
 	void EmitSDR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2D
+	void EmitLWC1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x31
+	void EmitLQC2(uint32_t instr, EE_JIT::IRInstruction& i); // 0x36
 	void EmitLD(uint32_t instr, EE_JIT::IRInstruction& i); // 0x37
 	void EmitSWC1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x39
+	void EmitSQC2(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3e
 	void EmitSD(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3f
 
 	void EmitSLL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
@@ -223,20 +276,28 @@ private:
 	void EmitSyscall(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0C
 	void EmitBreak(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0D
 	void EmitMFHI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x10
+	void EmitMTHI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x11
 	void EmitMFLO(uint32_t instr, EE_JIT::IRInstruction& i); // 0x12
+	void EmitMTLO(uint32_t instr, EE_JIT::IRInstruction& i); // 0x13
 	void EmitDSLLV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x14
+	void EmitDSRLV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x16
 	void EmitDSRAV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x17
 	void EmitMULT(uint32_t instr, EE_JIT::IRInstruction& i); // 0x18
+	void EmitMULTU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x19
 	void EmitDIV(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1a
 	void EmitDIVU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1b
+	void EmitADD(uint32_t instr, EE_JIT::IRInstruction& i); // 0x20
 	void EmitADDU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x21
+	void EmitSUB(uint32_t instr, EE_JIT::IRInstruction& i); // 0x22
 	void EmitSUBU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x23
 	void EmitAND(uint32_t instr, EE_JIT::IRInstruction& i); // 0x24
 	void EmitOR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x25
+	void EmitXOR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x25
 	void EmitNOR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x27
 	void EmitSLT(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2A
 	void EmitSLTU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2B
 	void EmitDADDU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2D
+	void EmitDSUBU(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2F
 	void EmitDSLL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x38
 	void EmitDSRL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3A
 	void EmitDSLL32(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3C
@@ -247,18 +308,89 @@ private:
 	void EmitBGEZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x01
 	void EmitBLTZL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
 	void EmitBGEZL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x03
+	void EmitBGEZAL(uint32_t instr, EE_JIT::IRInstruction& i); // 0x11
 	
+	// MMI
+	void EmitMADD(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
+	void EmitPLZCW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x04
+	void EmitMFHI1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x10
+	void EmitMTHI1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x11
 	void EmitMFLO1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x12
+	void EmitMTLO1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x13
 	void EmitMULT1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x18
 	void EmitDIVU1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1B
+	void EmitPADDSB(uint32_t instr, EE_JIT::IRInstruction& i); // 0x30
 
-	void EmitPOR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x05
+	void EmitPSUBB(uint32_t instr, EE_JIT::IRInstruction& i); // 0x09
+
+	// MMI2
+	void EmitPMFHI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x08
+	void EmitPMFLO(uint32_t instr, EE_JIT::IRInstruction& i); // 0x09
+	void EmitPCPYLD(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0e
+	void EmitPAND(uint32_t instr, EE_JIT::IRInstruction& i); // 0x12
+
+	// MMI3
+	void EmitPCPYUD(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0E
+	void EmitPOR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x12
+	void EmitPNOR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x13
+	void EmitPCPYH(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1B
 
 	void EmitPADDUW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x10
 
+	// COP0
 	void EmitMFC0(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
 	void EmitMTC0(uint32_t instr, EE_JIT::IRInstruction& i); // 0x04
 	void EmitERET(uint32_t instr, EE_JIT::IRInstruction& i); // 0x18
+
+	// COP1
+	void EmitMFC1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
+	void EmitMTC1(uint32_t instr, EE_JIT::IRInstruction& i); // 0x04
+
+	// COP1 BC
+	void EmitBC1F(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
+	void EmitBC1T(uint32_t instr, EE_JIT::IRInstruction& i); // 0x01
+	
+	// COP1.S
+	void EmitADDS(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
+	void EmitSUBS(uint32_t instr, EE_JIT::IRInstruction& i); // 0x01
+	void EmitMULS(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
+	void EmitDIVS(uint32_t instr, EE_JIT::IRInstruction& i); // 0x03
+	void EmitMOVS(uint32_t instr, EE_JIT::IRInstruction& i); // 0x06
+	void EmitNEGS(uint32_t instr, EE_JIT::IRInstruction& i); // 0x07
+	void EmitADDAS(uint32_t instr, EE_JIT::IRInstruction& i); // 0x18
+	void EmitMADDS(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1c
+	void EmitCVTW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x24
+	void EmitCEQS(uint32_t instr, EE_JIT::IRInstruction& i); // 0x32
+	void EmitCLES(uint32_t instr, EE_JIT::IRInstruction& i); // 0x36
+
+	// COP1.W
+	void EmitCVTS(uint32_t instr, EE_JIT::IRInstruction& i); // 0x30
+
+	// COP2
+	void EmitQMFC2(uint32_t instr, EE_JIT::IRInstruction& i); // 0x01
+	void EmitCFC2(uint32_t instr, EE_JIT::IRInstruction& i); // 0x02
+	void EmitQMTC2(uint32_t instr, EE_JIT::IRInstruction& i); // 0x05
+	void EmitCTC2(uint32_t instr, EE_JIT::IRInstruction& i); // 0x06
+
+	// COP2 special1
+	void EmitVMADDZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0a
+	void EmitVMADDW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0b
+	void EmitVSUB(uint32_t instr, EE_JIT::IRInstruction& i); // 0x2c
+	void EmitVIADD(uint32_t instr, EE_JIT::IRInstruction& i); // 0x30
+
+	// COP2 special2
+	void EmitVMADDAX(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0a
+	void EmitVMADDAY(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0b
+	void EmitVMADDAZ(uint32_t instr, EE_JIT::IRInstruction& i); // 0x0b
+	void EmitVMULAX(uint32_t instr, EE_JIT::IRInstruction& i); // 0x18
+	void EmitVMULAW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1B
+	void EmitVCLIPW(uint32_t instr, EE_JIT::IRInstruction& i); // 0x1F
+	void EmitVSQI(uint32_t instr, EE_JIT::IRInstruction& i); // 0x35
+	void EmitVISWR(uint32_t instr, EE_JIT::IRInstruction& i); // 0x3f
+
+	// BC0
+	void EmitBC0F(uint32_t instr, EE_JIT::IRInstruction& i); // 0x00
+	void EmitBC0T(uint32_t instr, EE_JIT::IRInstruction& i); // 0x01
 
 	void EmitIncPC(EE_JIT::IRInstruction& i);
 public:
@@ -285,22 +417,27 @@ struct ProcessorState
 {
 	uint128_t regs[32];
 	uint32_t cop0_regs[32];
+	union
+	{
+		float f;
+		uint32_t u;
+		int32_t i;
+	} acc;
 	uint32_t pc, next_pc;
-	uint32_t hi1, hi;
-	uint32_t lo1, lo;
+	uint64_t hi1, hi;
+	uint64_t lo1, lo;
 	union FPR
 	{
 		uint32_t i;
 		int32_t s;
 		float f;
 	} fprs[32];
-	// 0-15 are VI00-VI15, standard integer registers
-	// 16-32 are control registers, including VU1's for some reason
-	// In fact, you can start a VU1 microprogram through CTC2, because... yeah
-	uint32_t cop2_regs[32];
+	bool c = false;
 
 	uint32_t pc_at;
 };
+
+extern bool can_disassemble;
 
 void Reset();
 int Clock();
@@ -310,11 +447,18 @@ void MarkDirty(uint32_t address, uint32_t size);
 void EmitPrequel();
 void Exception(uint8_t code);
 
+void SetIp1Pending(); // Set IP1 to pending, signalling a DMA interrupt
+void ClearIp1Pending(); // Clear a DMA interrupt
+
+void SetIp0Pending();
+
+extern bool can_dump;
+
 void CheckCacheFull();
 bool DoesBlockExit(uint32_t addr);
 void EmitIR(uint32_t instr);
 bool IsBranch(uint32_t instr);
-EE_JIT::JIT::EntryFunc EmitDone(int cycles_taken);
+EE_JIT::JIT::EntryFunc EmitDone(uint64_t cycles_taken);
 EE_JIT::JIT::EntryFunc GetExistingBlockFunc(uint32_t addr);
 uint64_t GetExistingBlockCycles(uint32_t addr);
 
