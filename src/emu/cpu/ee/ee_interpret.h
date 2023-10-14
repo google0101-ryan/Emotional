@@ -208,7 +208,7 @@ union COP0Status
     };
 
     extern COP0 cop0;
-    static constexpr bool CanDisassamble = false;
+    static constexpr bool CanDisassamble = true;
 
     extern EETLB* tlb;
 
@@ -237,7 +237,8 @@ void Reset();
 void Clock(int cycles);
 void Dump();
 
-// Normal
+// Normal opcodes
+void Regimm(uint32_t instr); // 0x01
 void J(uint32_t instr); // 0x02
 void Jal(uint32_t instr); // 0x03
 void Beq(uint32_t instr); // 0x04
@@ -249,85 +250,47 @@ void Slti(uint32_t instr); // 0x0A
 void Sltiu(uint32_t instr); // 0x0B
 void Andi(uint32_t instr); // 0x0C
 void Ori(uint32_t instr); // 0x0D
-void Xori(uint32_t instr); // 0x0E
 void Lui(uint32_t instr); // 0x0F
+void Cop0(uint32_t instr); // 0x10
 void Beql(uint32_t instr); // 0x14
 void Bnel(uint32_t instr); // 0x15
-void Daddiu(uint32_t instr); // 0x19
-void Lq(uint32_t instr); // 0x1e
-void Sq(uint32_t instr); // 0x1f
 void Lb(uint32_t instr); // 0x20
 void Lh(uint32_t instr); // 0x21
 void Lw(uint32_t instr); // 0x23
 void Lbu(uint32_t instr); // 0x24
-void Lhu(uint32_t instr); // 0x25
-void Lwu(uint32_t instr); // 0x27
 void Sb(uint32_t instr); // 0x28
-void Sh(uint32_t instr); // 0x29
 void Sw(uint32_t instr); // 0x2B
-void Swc1(uint32_t instr); // 0x31
 void Ld(uint32_t instr); // 0x37
+void Swc1(uint32_t instr); // 0x39
 void Sd(uint32_t instr); // 0x3F
 
-// Special
+// Special opcodes
 void Sll(uint32_t instr); // 0x00
-void Srl(uint32_t instr); // 0x02
 void Sra(uint32_t instr); // 0x03
-void Sllv(uint32_t instr); // 0x04
-void Srav(uint32_t instr); // 0x07
 void Jr(uint32_t instr); // 0x08
 void Jalr(uint32_t instr); // 0x09
-void Movz(uint32_t instr); // 0x0a
-void Movn(uint32_t instr); // 0x0b
+void Movn(uint32_t instr); // 0x0B
+void Sync(uint32_t instr); // 0x0F
 void Mfhi(uint32_t instr); // 0x10
 void Mflo(uint32_t instr); // 0x12
-void Dsllv(uint32_t instr); // 0x14
-void Dsrav(uint32_t instr); // 0x17
 void Mult(uint32_t instr); // 0x18
-void Multu(uint32_t instr); // 0x19
 void Div(uint32_t instr); // 0x1A
 void Divu(uint32_t instr); // 0x1B
 void Addu(uint32_t instr); // 0x21
 void Subu(uint32_t instr); // 0x23
-void And(uint32_t instr); // 0x24
 void Or(uint32_t instr); // 0x25
-void Nor(uint32_t instr); // 0x27
-void Slt(uint32_t instr); // 0x2a
-void Sltu(uint32_t instr); // 0x2b
-void Daddu(uint32_t instr); // 0x2d
-void Dsll(uint32_t instr); // 0x38
-void Dsll32(uint32_t instr); // 0x3c
-void Dsra32(uint32_t instr); // 0x3f
+void Sltu(uint32_t instr); // 0x2B
+void Daddu(uint32_t instr); // 0x2D
 
-// Regimm
-void Bltz(uint32_t instr); // 0x00
+// REGIMM opcodes
 void Bgez(uint32_t instr); // 0x01
 
-// Cop0
+// COP0
 void Mfc0(uint32_t instr); // 0x00
 void Mtc0(uint32_t instr); // 0x04
+void TlbOpcodes(uint32_t instr); // 0x10
 
-// Cop0 TLB
+// COP0 TLB
 void Tlbwi(uint32_t instr); // 0x02
-
-// MMI
-void Mflo1(uint32_t instr); // 0x12
-void Mult1(uint32_t instr); // 0x18
-void Divu1(uint32_t instr); // 0x1B
-
-// MMI3
-void Por(uint32_t instr);
-
-// COP2
-void Qmfc2(uint32_t instr); // 0x01
-void Cfc2(uint32_t instr); // 0x02
-void Qmtc2(uint32_t instr); // 0x05
-void Ctc2(uint32_t instr); // 0x06
-
-// COP1
-void Mtc1(uint32_t instr); // 0x04
-
-// COP1.S
-void Addas(uint32_t instr); // 0x18
 
 }

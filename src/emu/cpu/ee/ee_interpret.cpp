@@ -320,6 +320,7 @@ void EEInterpreter::Clock(int cycles)
         {
             if constexpr (CanDisassamble)
                 printf("[emu/EE]: nop\n");
+            cop0.count++;
             continue;
         }
 
@@ -328,23 +329,14 @@ void EEInterpreter::Clock(int cycles)
         {
         case 0x00:
         {
-            opcode = instr & 0x3F;
-            switch (opcode)
+            uint8_t func = instr & 0x3F;
+            switch (func)
             {
             case 0x00:
                 Sll(instr);
                 break;
-            case 0x02:
-                Srl(instr);
-                break;
             case 0x03:
                 Sra(instr);
-                break;
-            case 0x04:
-                Sllv(instr);
-                break;
-            case 0x07:
-                Srav(instr);
                 break;
             case 0x08:
                 Jr(instr);
@@ -352,15 +344,11 @@ void EEInterpreter::Clock(int cycles)
             case 0x09:
                 Jalr(instr);
                 break;
-            case 0x0a:
-                Movz(instr);
-                break;
-            case 0x0b:
+            case 0x0B:
                 Movn(instr);
                 break;
-            case 0x0f:
-                if constexpr (CanDisassamble)
-                    printf("[emu/EE]: sync.p\n");
+            case 0x0F:
+                Sync(instr);
                 break;
             case 0x10:
                 Mfhi(instr);
@@ -368,22 +356,13 @@ void EEInterpreter::Clock(int cycles)
             case 0x12:
                 Mflo(instr);
                 break;
-            case 0x14:
-                Dsllv(instr);
-                break;
-            case 0x17:
-                Dsrav(instr);
-                break;
             case 0x18:
                 Mult(instr);
                 break;
-            case 0x19:
-                Multu(instr);
-                break;
-            case 0x1a:
+            case 0x1A:
                 Div(instr);
                 break;
-            case 0x1b:
+            case 0x1B:
                 Divu(instr);
                 break;
             case 0x21:
@@ -392,56 +371,24 @@ void EEInterpreter::Clock(int cycles)
             case 0x23:
                 Subu(instr);
                 break;
-            case 0x24:
-                And(instr);
-                break;
             case 0x25:
                 Or(instr);
                 break;
-            case 0x27:
-                Nor(instr);
-                break;
-            case 0x2a:
-                Slt(instr);
-                break;
-            case 0x2b:
+            case 0x2B:
                 Sltu(instr);
                 break;
-            case 0x2d:
+            case 0x2D:
                 Daddu(instr);
                 break;
-            case 0x38:
-                Dsll(instr);
-                break;
-            case 0x3c:
-                Dsll32(instr);
-                break;
-            case 0x3f:
-                Dsra32(instr);
-                break;
             default:
-                printf("[emu/EE]: Unknown special instruction 0x%02x\n", opcode);
+                printf("[emu/EE]: Unknown special instruction 0x%02x\n", func);
                 exit(1);
             }
             break;
         }
         case 0x01:
-        {
-            opcode = (instr >> 16) & 0x1F;
-            switch (opcode)
-            {
-            case 0x00:
-                Bltz(instr);
-                break;
-            case 0x01:
-                Bgez(instr);
-                break;
-            default:
-                printf("[emu/EE]: Unknown regimm instruction 0x%02x\n", opcode);
-                exit(1);
-            }
+            Regimm(instr);
             break;
-        }
         case 0x02:
             J(instr);
             break;
@@ -463,190 +410,29 @@ void EEInterpreter::Clock(int cycles)
         case 0x09:
             Addiu(instr);
             break;
-        case 0x0a:
+        case 0x0A:
             Slti(instr);
             break;
-        case 0x0b:
+        case 0x0B:
             Sltiu(instr);
             break;
-        case 0x0c:
+        case 0x0C:
             Andi(instr);
             break;
-        case 0x0d:
+        case 0x0D:
             Ori(instr);
             break;
-        case 0x0e:
-            Xori(instr);
-            break;
-        case 0x0f:
+        case 0x0F:
             Lui(instr);
             break;
         case 0x10:
-        {
-            opcode = (instr >> 21) & 0x3F;
-            switch (opcode)
-            {
-            case 0x00:
-                Mfc0(instr);
-                break;
-            case 0x04:
-                Mtc0(instr);
-                break;
-            case 0x10:
-            {
-                opcode = instr & 0x3F;
-                switch (opcode)
-                {
-                case 0x02:
-                    Tlbwi(instr);
-                    break;
-                default:
-                    printf("[emu/EE]: Unknown cop0 tlb instruction 0x%02x\n", opcode);
-                    exit(1);
-                }
-                break;
-            }
-            default:
-                printf("[emu/EE]: Unknown cop0 instruction 0x%02x\n", opcode);
-                exit(1);
-            }
+            Cop0(instr);
             break;
-        }
-        case 0x11:
-        {
-            opcode = (instr >> 21) & 0x1F;
-            switch (opcode)
-            {
-            case 0x04:
-                Mtc1(instr);
-                break;
-            case 0x06:
-                break;
-            case 0x10:
-            {
-                opcode = instr & 0x3F;
-                switch (opcode)
-                {
-                case 0x18:
-                    Addas(instr);
-                    break;
-                default:
-                    printf("[emu/EE]: Unknown cop1.s instruction 0x%02x\n", opcode);
-                    exit(1);
-                }
-                break;
-            }
-            default:
-                printf("[emu/EE]: Unknown cop1 instruction 0x%02x\n", opcode);
-                exit(1);
-            }
-            break;
-        }
-        case 0x12:
-        {
-            opcode = (instr >> 21) & 0x3F;
-            switch (opcode)
-            {
-            case 0x01:
-                Qmfc2(instr);
-                break;
-            case 0x02:
-                Cfc2(instr);
-                break;
-            case 0x05:
-                Qmtc2(instr);
-                break;
-            case 0x06:
-                Ctc2(instr);
-                break;
-            case 0x10 ... 0x1F:
-            {
-                opcode = instr & 0x3F;
-                switch (opcode)
-                {
-                case 0x2c:
-                    VectorUnit::VU0::Vsub(instr);
-                    break;
-                case 0x30:
-                    VectorUnit::VU0::Viadd(instr);
-                    break;
-                case 0x3C ... 0x3F:
-                {
-                    opcode = (instr & 0x3) | ((instr >> 6) & 0x1F) << 2;
-                    switch (opcode)
-                    {
-                    case 0x35:
-                        VectorUnit::VU0::Vsqi(instr);
-                        break;
-                    case 0x3f:
-                        VectorUnit::VU0::Viswr(instr);
-                        break;
-                    default:
-                        printf("[emu/EE]: Unknown cop2 special2 instruction 0x%02x\n", opcode);
-                        exit(1);
-                    }
-                    break;
-                }
-                default:
-                    printf("[emu/EE]: Unknown cop2 special1 instruction 0x%02x\n", opcode);
-                    exit(1);
-                }
-                break;
-            }
-            default:
-                printf("[emu/EE]: Unknown cop2 instruction 0x%02x\n", opcode);
-                exit(1);
-            }
-            break;
-        }
         case 0x14:
             Beql(instr);
             break;
         case 0x15:
             Bnel(instr);
-            break;
-        case 0x19:
-            Daddiu(instr);
-            break;
-        case 0x1C:
-        {
-            opcode = instr & 0x3F;
-            switch (opcode)
-            {
-            case 0x12:
-                Mflo1(instr);
-                break;
-            case 0x18:
-                Mult1(instr);
-                break;
-            case 0x1b:
-                Divu1(instr);
-                break;
-            case 0x29:
-            {
-                opcode = (instr >> 6) & 0x1F;
-                switch (opcode)
-                {
-                case 0x12:
-                    Por(instr);
-                    break;
-                default:
-                    printf("[emu/EE]: Unknown mmi3 instruction 0x%02x\n", opcode);
-                    exit(1);
-                }
-                break;
-            }
-            default:
-                printf("[emu/EE]: Unknown mmi instruction 0x%02x\n", opcode);
-                exit(1);
-            }
-            break;
-        }
-        case 0x1e:
-            Lq(instr);
-            break;
-        case 0x1f:
-            Sq(instr);
             break;
         case 0x20:
             Lb(instr);
@@ -660,24 +446,11 @@ void EEInterpreter::Clock(int cycles)
         case 0x24:
             Lbu(instr);
             break;
-        case 0x25:
-            Lhu(instr);
-            break;
-        case 0x27:
-            Lwu(instr);
-            break;
         case 0x28:
             Sb(instr);
             break;
-        case 0x29:
-            Sh(instr);
-            break;
         case 0x2b:
             Sw(instr);
-            break;
-        case 0x2f:
-            if constexpr (CanDisassamble)
-                printf("cache\n");
             break;
         case 0x37:
             Ld(instr);
