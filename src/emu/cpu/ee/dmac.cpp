@@ -7,7 +7,11 @@
 #include <emu/sched/scheduler.h>
 #include <emu/dev/sif.h>
 #include <emu/gpu/gif.hpp>
+#ifdef EE_JIT
 #include <emu/cpu/ee/EmotionEngine.h>
+#else
+#include <emu/cpu/ee/ee_interpret.h>
+#endif
 
 #include <cstdio>
 #include <cstdlib>
@@ -190,6 +194,9 @@ void DoGIFTransfer()
 #ifdef EE_JIT
 	if (stat.channel_irq & stat.channel_irq_mask)
         EmotionEngine::SetIp1Pending();
+#else
+    if (stat.channel_irq & stat.channel_irq_mask)
+        EEInterpreter::SetIP1Pending();
 #endif
 }
 
@@ -546,6 +553,7 @@ void HandleSIF0Transfer()
 #ifdef EE_JIT
             EmotionEngine::SetIp1Pending();
 #else
+            EEInterpreter::SetIP1Pending();
 #endif
         }
 
@@ -936,6 +944,11 @@ void WriteDSTAT(uint32_t data)
         EmotionEngine::SetIp1Pending();
     else
         EmotionEngine::ClearIp1Pending();
+#else
+    if (stat.channel_irq & stat.channel_irq_mask)
+        EEInterpreter::SetIP1Pending();
+    else
+        EEInterpreter::ClearIP1Pending();
 #endif
 }
 

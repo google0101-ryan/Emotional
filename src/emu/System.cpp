@@ -4,7 +4,6 @@
 #include "System.h"
 #include <emu/memory/Bus.h>
 #include <emu/cpu/ee/EmotionEngine.h>
-#include <emu/cpu/ee/ee_interpret.h>
 #include <emu/sched/scheduler.h>
 #include <emu/cpu/ee/vu.h>
 #include <emu/cpu/iop/cpu.h>
@@ -106,11 +105,7 @@ void System::LoadBios(std::string biosName)
 void System::Reset()
 {
 	Scheduler::InitScheduler();
-#ifdef EE_JIT
 	EmotionEngine::Reset();
-#else
-	EEInterpreter::Reset();
-#endif
 
 	IOP_MANAGEMENT::Reset();
 
@@ -131,27 +126,20 @@ void System::Reset()
 
 void System::Run()
 {
-#ifdef EE_JIT
-	EmotionEngine::Clock();
-#else
 	while (1)
 	{
-		size_t cycles = Scheduler::GetNextTimestamp();
+		// size_t cycles = Scheduler::GetNextTimestamp();
 
-		EEInterpreter::Clock(cycles);
+		int true_cycles = EmotionEngine::Clock(32);
+		IOP_MANAGEMENT::Clock(true_cycles / 2);
 
-		Scheduler::CheckScheduler(cycles);
+		Scheduler::CheckScheduler(true_cycles);
 	}
-#endif
 }
 
 void System::Dump()
 {
-#ifdef EE_JIT
 	EmotionEngine::Dump();
-#else
-	EEInterpreter::Dump();
-#endif
 	Bus::Dump();
 	VectorUnit::Dump();
 	IOP_MANAGEMENT::Dump();

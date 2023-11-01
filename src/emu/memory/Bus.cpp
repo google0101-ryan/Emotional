@@ -32,7 +32,7 @@ uint32_t Bus::spu2_stat = 0;
 
 uint32_t Translate(uint32_t addr)
 {
-    constexpr uint32_t KUSEG_MASKS[8] =
+    constexpr uint32_t KUSEG_MASKS[8] = 
     {
         /* KUSEG: Don't touch the address, it's fine */
         0xffffffff, 0xfffffff, 0xfffffff, 0xffffffff,
@@ -44,12 +44,8 @@ uint32_t Translate(uint32_t addr)
         0xffffffff, 0x1fffffff,
     };
 
-	if (addr >= 0xFFFF8000) [[unlikely]]
-	{
-		return (addr - 0xFFFF8000) + 0x78000;
-	}
-
-    addr &= KUSEG_MASKS[addr >> 29];
+	if ((addr & 0xF0000000) != 0x70000000)
+	    addr &= 0x1FFFFFFF;
 
 	return addr;
 }
@@ -65,6 +61,7 @@ void Bus::LoadBios(uint8_t *data)
 	console.open("console.txt");
 
 	GS::Initialize();
+	VectorUnit::VU0::Init();
 }
 
 void Bus::Dump()
@@ -436,16 +433,21 @@ void Bus::Write64(uint32_t addr, uint64_t data)
 	exit(1);
 }
 
+bool firstTime = true;
+
 void Bus::Write32(uint32_t addr, uint32_t data)
 {
 	EmotionEngine::MarkDirty(addr, sizeof(data));
 
-	if (addr == 0x8001e140)
-	{
-		printf("Writing 0x%08x to GIFTAG stuff\n", data);
-	}
-
 	addr = Translate(addr);
+
+	if (addr == 0x10c0 && data == 0 && !firstTime)
+	{
+		printf("Writing 0 to 0x10c0\n");
+		exit(1);
+	}
+	else if (addr == 0x10c0 && data == 0)
+		firstTime = false;
 
 	if (addr >= 0x70000000 && addr < 0x70004000)
 	{
@@ -777,6 +779,8 @@ uint32_t Bus::LoadElf(std::string name)
 	for (auto i = header.e_phoff; i < header.e_phoff + (header.e_phnum*0x20); i += 0x20)
 	{
 		auto pheader = *(Elf32_Phdr*)&buffer[i];
+
+		printf("Phdr: Load: 0x%08x\n", pheader.p_vaddr);
 
 		int mem_w = pheader.p_paddr;
 		for (auto file_w = pheader.p_offset; file_w < pheader.p_offset+pheader.p_filesz; file_w += 4)

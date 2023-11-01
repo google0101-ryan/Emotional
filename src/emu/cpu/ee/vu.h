@@ -67,6 +67,12 @@ struct VectorState
 
 extern VectorState vu0_state;
 
+
+inline void Init()
+{
+    vu0_state.vf[0].w = 1.0f;
+}
+
 // VU0 specific stuff, like COP2 opcodes
 uint32_t ReadControl(int index);
 void WriteControl(int index, uint32_t data);

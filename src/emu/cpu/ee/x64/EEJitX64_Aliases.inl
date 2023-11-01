@@ -1,0 +1,1 @@
+#define MOV(a, b) generator->mov(a, b)

@@ -130,6 +130,7 @@ void WriteControl(int index, uint32_t data)
 	switch (index)
 	{
 	case 1 ... 15:
+		printf("Writing 0x%08x to vi%02d\n", data, index);
 		vu0_state.vi[index] = data;
 		break;
 	case 16:
@@ -166,6 +167,7 @@ __uint128_t ReadReg(int index)
 
 void WriteReg(int index, __uint128_t val)
 {
+	printf("VU0: Writing %s to vf%02d\n", print_128({val}), index);
 	vu0_state.vf[index].u128.u128 = val;
 }
 
@@ -586,15 +588,15 @@ void Vsqi(uint32_t instr)
 	auto& f = vu0_state.vf[fs];
 
 	if (x)
-		WriteDataMem32(0, vu0_state.vi[it]+0x0, f.x);
+		WriteDataMem32(0, vu0_state.vi[it]*16+0x0, f.x);
 	if (y)
-		WriteDataMem32(0, vu0_state.vi[it]+0x4, f.y);
+		WriteDataMem32(0, vu0_state.vi[it]*16+0x4, f.y);
 	if (z)
-		WriteDataMem32(0, vu0_state.vi[it]+0x8, f.z);
+		WriteDataMem32(0, vu0_state.vi[it]*16+0x8, f.z);
 	if (w)
-		WriteDataMem32(0, vu0_state.vi[it]+0xc, f.w);
+		WriteDataMem32(0, vu0_state.vi[it]*16+0xc, f.w);
 	
-	vu0_state.vi[it] += 0x10;
+	VU0::vu0_state.vi[it]++;
 
 	printf("sqi.%s vf%02d, (vi%02d++).%s\n", dest_.c_str(), fs, it, dest_.c_str());
 }
