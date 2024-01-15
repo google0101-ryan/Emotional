@@ -2,26 +2,6 @@
 #include "EEJitx64.h"
 #include <emu/cpu/ee/EmotionEngine.h>
 
-enum HostRegisters
-{
-    RAX,
-    RCX,
-    RDX,
-    RBX,
-    RSP,
-    RBP,
-    RSI,
-    RDI,
-    R8,
-    R9,
-    R10,
-    R11,
-    R12,
-    R13,
-    R14,
-    R15
-};
-
 struct HostRegister
 {
     bool allocated;
@@ -64,9 +44,14 @@ size_t RegAllocatorX64::GetRegOffset(GuestRegister reg)
     case GuestRegister::REG_SP: return offsetof(EmotionEngine::ProcessorState, regs[29]);
     case GuestRegister::REG_FP: return offsetof(EmotionEngine::ProcessorState, regs[30]);
     case GuestRegister::REG_RA: return offsetof(EmotionEngine::ProcessorState, regs[31]);
-    case GuestRegister::REG_COP0_PRID: return offsetof(EmotionEngine::ProcessorState, cop0_regs[15]);
+    case GuestRegister::REG_COP0_INDEX ... GuestRegister::REG_COP0_CONFIG:
+        return offsetof(EmotionEngine::ProcessorState, cop0_regs)+((reg - COP0_OFFS) * sizeof(uint32_t));
+	case LO: return offsetof(EmotionEngine::ProcessorState, lo);
+	case HI: return offsetof(EmotionEngine::ProcessorState, hi);
+	case LO1: return offsetof(EmotionEngine::ProcessorState, lo1);
+	case HI1: return offsetof(EmotionEngine::ProcessorState, hi1);
     default:
-        printf("[REGALLOC_X64]: Couldn't find offset of unknown guest register %d\n", (int)reg);
+        printf("[REGALLOC_X64]: Couldn't find offset of unknown guest register %d (%d)\n", (int)reg, (int)reg - 32);
         exit(1);
     }
 }
@@ -104,7 +89,6 @@ int RegAllocatorX64::GetHostReg(GuestRegister reg, bool dest)
     // Find the least used register
     for (int i = 0; i < 16; i++)
     {
-        printf("%d\n", regs[i].used);
         if (regs[i].used > hitsLeast)
         {
             hitsLeast = regs[i].used;
@@ -136,7 +120,18 @@ void RegAllocatorX64::DoWriteback()
     }
 }
 
-RegAllocatorX64::RegAllocatorX64()
+void RegAllocatorX64::InvalidateRegister(HostRegisters reg)
+{
+	if (regs[reg].allocated && regs[reg].mapping != GuestRegister::NONE)
+	{
+		EEJitX64::JitStoreReg(regs[reg].mapping);
+		regs[reg].allocated = false;
+		regs[reg].mapping = GuestRegister::NONE;
+		regs[reg].used = 0;
+	}
+}
+
+void RegAllocatorX64::Reset()
 {
     for (int i = 0; i < 16; i++)
     {
@@ -145,12 +140,13 @@ RegAllocatorX64::RegAllocatorX64()
         regs[i].used = 0;
     }
 
-    // Mark RSP, RBP, RAX, RDI, RSI, and R8 as used
+    // Mark RSP, RBP, RAX, RDI, RSI, RCX, and R8 as used
     // RSP is used for the stack (and it should never be overwritten)
     // RBP is used to point to the processor state
     // RAX is used for return values
     // RDI and RSI are used for passing values to functions
     // R8 holds the current value of pc
+    // RCX is for function pointers
     regs[RSP].allocated = true;
     regs[RSP].mapping = GuestRegister::NONE;
     regs[RSP].used = -1;
@@ -163,6 +159,10 @@ RegAllocatorX64::RegAllocatorX64()
     regs[RAX].mapping = GuestRegister::NONE;
     regs[RAX].used = -1;
     
+    regs[RCX].allocated = true;
+    regs[RCX].mapping = GuestRegister::NONE;
+    regs[RCX].used = -1;
+    
     regs[RDI].allocated = true;
     regs[RDI].mapping = GuestRegister::NONE;
     regs[RDI].used = -1;
@@ -174,4 +174,9 @@ RegAllocatorX64::RegAllocatorX64()
     regs[R8].allocated = true;
     regs[R8].mapping = GuestRegister::NONE;
     regs[R8].used = -1;
+}
+
+RegAllocatorX64::RegAllocatorX64()
+{
+    Reset();
 }

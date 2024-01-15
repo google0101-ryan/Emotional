@@ -2,6 +2,7 @@
 #include "RegAllocator.h"
 #include <emu/cpu/ee/EEJit.h>
 #include <emu/cpu/ee/EmotionEngine.h>
+#include <emu/memory/Bus.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -20,12 +21,38 @@ void EEJitX64::JitStoreReg(GuestRegister reg)
 {
     auto offs = reg_alloc.GetRegOffset(reg);
 
-    generator->mov(generator->qword[generator->rbp + offs], Xbyak::Reg64(reg_alloc.GetHostReg(reg)));
+    if (reg >= COP0_OFFS && reg < COP0_OFFS+32)
+        MOV(generator->dword[generator->rbp + offs], Xbyak::Reg32(reg_alloc.GetHostReg(reg)));
+    else
+        MOV(generator->qword[generator->rbp + offs], Xbyak::Reg64(reg_alloc.GetHostReg(reg)));
 }
 
 void EEJitX64::JitLoadReg(GuestRegister reg, int hostReg)
 {
-    generator->mov(Xbyak::Reg64(hostReg), generator->qword[generator->rbp + reg_alloc.GetRegOffset(reg)]);
+    if (reg >= COP0_OFFS && reg < COP0_OFFS+32)
+        MOV(Xbyak::Reg32(hostReg), generator->dword[generator->rbp + reg_alloc.GetRegOffset(reg)]);
+    else
+        MOV(Xbyak::Reg64(hostReg), generator->qword[generator->rbp + reg_alloc.GetRegOffset(reg)]);
+}
+
+void SaveHostRegisters()
+{
+    generator->push(generator->rbx);
+    generator->push(generator->rdx);
+    generator->push(generator->r8);
+    generator->push(generator->r9);
+    generator->push(generator->r10);
+    generator->push(generator->r11);
+}
+
+void RestoreHostRegisters()
+{
+    generator->pop(generator->r11);
+    generator->pop(generator->r10);
+    generator->pop(generator->r9);
+    generator->pop(generator->r8);
+    generator->pop(generator->rdx);
+    generator->pop(generator->rbx);
 }
 
 void JitPrologue()
@@ -44,9 +71,9 @@ void JitEpilogue()
     reg_alloc.DoWriteback();
 
     // Write R8 back to pc
-    generator->mov(generator->qword[generator->rbp + offsetof(EmotionEngine::ProcessorState, pc)], generator->r8);
-    generator->mov(generator->qword[generator->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)], generator->r8);
-    generator->add(generator->qword[generator->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)], 4);
+    MOV(generator->qword[generator->rbp + offsetof(EmotionEngine::ProcessorState, pc)], generator->r8);
+    MOV(generator->qword[generator->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)], generator->r8);
+    ADD(generator->qword[generator->rbp + offsetof(EmotionEngine::ProcessorState, next_pc)], 4);
 
     // Now restore all host registers
     for (int i = 15; i >= 0; i--)
@@ -66,10 +93,16 @@ void JitMov(IRInstruction& i)
         }
         else
         {
-            auto src = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)(i.args[0].GetReg()+COP0_OFFS)));
-            auto dst = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg(), true));
-            generator->mov(dst, src);
+            auto src = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)(i.args[1].GetReg()+COP0_OFFS)));
+            auto dst = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true));
+            MOV(dst, src);
         }
+    }
+    else if (i.args[1].IsReg() && i.args[0].IsCop0())
+    {
+        auto src = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+        auto dst = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)(i.args[0].GetReg()+COP0_OFFS), true));
+        MOV(dst, src);
     }
     else if (i.args[0].IsReg() && i.args[1].IsImm())
     {
@@ -81,7 +114,7 @@ void JitMov(IRInstruction& i)
         else
         {
             auto dst = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)(i.args[0].GetReg()), true));
-            generator->mov(dst, i.args[1].GetImm64());
+            MOV(dst, i.args[1].GetImm64());
         }
     }
     else
@@ -104,12 +137,23 @@ void JitSlt(IRInstruction& i)
         else
         {
             auto dst = Xbyak::Reg8(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true));
-            auto src = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
-            int32_t imm = i.args[2].GetImm();
+            if (i.args[1].GetReg() == 0)
+            {
+                int32_t imm = i.args[2].GetImm();
+                MOV(generator->rdi, 0);
+                generator->cmp(generator->rdi, imm);
+                generator->setl(dst);
+                generator->movzx(Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true)), dst);
+            }
+            else
+            {
+                auto src = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+                int32_t imm = i.args[2].GetImm();
 
-            generator->cmp(src, imm);
-            generator->setl(dst);
-            generator->movzx(Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true)), dst);
+                generator->cmp(src, imm);
+                generator->setl(dst);
+                generator->movzx(Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true)), dst);
+            }
         }
     }
     else
@@ -129,56 +173,398 @@ void JitBranch(IRInstruction& i)
     {
     case IRInstruction::BranchType::EQ:
     {
-        auto op2 = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
-        generator->cmp(op1, op2);
-        generator->jne(cond_failed);
+        if (i.args[1].GetReg() == 0)
+        {
+            generator->cmp(op1, 0);
+            generator->jne(cond_failed);
+        }
+        else if (i.args[0].GetReg() == 0)
+        {
+            auto op2 = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+            MOV(generator->rdi, 0);
+            generator->cmp(generator->rdi, i.args[1].GetImm());
+            generator->jne(cond_failed);
+        }
+        else
+        {
+            auto op2 = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+            generator->cmp(op1, op2);
+            generator->jne(cond_failed);
+        }
         break;
     }
+    case IRInstruction::BranchType::NE:
+    {
+        if (i.args[1].GetReg() == 0)
+        {
+            generator->cmp(op1, 0);
+            generator->je(cond_failed);
+        }
+        else if (i.args[0].GetReg() == 0)
+        {
+            auto op2 = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+            MOV(generator->rdi, 0);
+            generator->cmp(generator->rdi, i.args[1].GetImm());
+            generator->je(cond_failed);
+        }
+        else
+        {
+            auto op2 = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+            generator->cmp(op1, op2);
+            generator->je(cond_failed);
+        }
+        break;
+    }
+    case IRInstruction::BranchType::AL:
+        break;
     default:
         printf("Unknown branch condition %d\n", i.b_type);
         exit(1);
     }
 
-    generator->add(generator->r8, i.args[2].GetImm());
+    Xbyak::Label done;
+
+    ADD(generator->r8, i.args[2].GetImm()-4);
+    generator->jmp(done);
     generator->L(cond_failed);
+    ADD(generator->r8, 4);
+    generator->L(done);
+}
+
+void JitOr(IRInstruction& i)
+{
+    if (i.args[2].IsImm())
+    {
+        if (i.args[1].GetReg() == i.args[0].GetReg())
+        {
+            auto src = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+            generator->or_(src, i.args[2].GetImm());
+            return;
+        }
+        auto src = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+        auto dst = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true));
+
+        MOV(generator->rdi, src);
+        generator->or_(generator->rdi, i.args[2].GetImm());
+        MOV(dst, generator->rdi);
+    }
+    else
+    {
+		if (i.args[1].GetReg() == 0)
+		{
+			auto src = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[2].GetReg()));
+	        auto dst = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true));
+			MOV(dst, src);
+		}
+		else if (i.args[2].GetReg() == 0)
+		{
+			auto src = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+	        auto dst = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true));
+			MOV(dst, src);
+		}
+		else
+		{
+			auto src1 = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+	        auto src2 = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[2].GetReg()));
+	        auto dst = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true));
+			generator->or_(src1, src2);
+			MOV(dst, src1);
+		}
+    }
+}
+
+void JitJump(IRInstruction& i)
+{
+    if (i.args[0].IsReg() && i.args.size() == 1)
+    {
+        if (i.should_link)
+        {
+            auto lr = Xbyak::Reg64(reg_alloc.GetHostReg(REG_RA, true));
+            MOV(lr, generator->r8);
+        }
+
+        auto src = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg()));
+        MOV(generator->r8, src);
+    }
+	else if (i.args[0].IsReg() && i.args.size() == 2)
+    {
+		assert(i.should_link);
+       	auto lr = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true));
+        MOV(lr, generator->r8);
+    
+        auto src = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+        generator->mov(generator->r8d, src);
+    }
+    else
+    {
+		if (i.should_link)
+		{
+			auto lr = Xbyak::Reg64(reg_alloc.GetHostReg(REG_RA, true));
+            MOV(lr, generator->r8);
+		}
+
+		generator->and_(generator->r8, 0xF0000000);
+		generator->or_(generator->r8, i.args[0].GetImm());
+    }
+}
+
+void JitAdd(IRInstruction instr)
+{
+    if (instr.args[1].IsReg() && instr.args[2].IsImm() && instr.size == IRInstruction::Size32)
+    {
+        if (instr.args[1].GetReg() == 0)
+        {
+            auto dst = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)instr.args[0].GetReg(), true));
+            auto imm = instr.args[2].GetImm();
+            MOV(dst, imm);
+        }
+        else
+        {
+            auto src = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)instr.args[1].GetReg()));
+            auto dst = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)instr.args[0].GetReg(), true));
+            auto imm = instr.args[2].GetImm();
+
+            MOV(generator->rdi, src);
+            ADD(generator->rdi, imm);
+            MOV(dst, generator->rdi);
+        }
+    }
+    else if (instr.args[1].IsReg() && instr.args[2].IsReg() && instr.size == IRInstruction::Size64)
+    {
+		if (instr.args[1].GetReg() == 0 && instr.args[2].GetReg() == 0)
+		{
+			auto dst = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)instr.args[0].GetReg(), true));
+            MOV(dst, 0);
+		}
+        else if (instr.args[1].GetReg() == 0)
+        {
+            auto dst = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)instr.args[0].GetReg(), true));
+            auto imm = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)instr.args[2].GetReg()));
+            MOV(dst, imm);
+        }
+		else if (instr.args[2].GetReg() == 0)
+        {
+            auto dst = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)instr.args[0].GetReg(), true));
+            auto imm = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)instr.args[1].GetReg()));
+            MOV(dst, imm);
+        }
+        else
+        {
+            auto src = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)instr.args[1].GetReg()));
+            auto dst = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)instr.args[0].GetReg(), true));
+            auto src2 = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)instr.args[2].GetReg()));
+
+            MOV(generator->rdi, src);
+            ADD(generator->rdi, src2);
+            MOV(dst, generator->rdi);
+        }
+    }
+    else
+    {
+		printf("%d, %d\n", instr.args[1].type, instr.args[2].type);
+        assert(0 && "Unknown add combo");
+    }
+}
+
+void JitStore(IRInstruction instr)
+{
+    if (instr.access_size == IRInstruction::U32)
+    {
+        auto src = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)instr.args[2].GetReg()));
+        auto dst = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)instr.args[0].GetReg()));
+        auto imm = instr.args[1].GetImm();
+
+        SaveHostRegisters();
+
+        MOV(generator->rdi, src);
+        ADD(generator->rdi, imm);
+        MOV(generator->rsi, dst);
+        MOV(generator->rcx, reinterpret_cast<uint64_t>(Bus::Write32));
+        generator->call(generator->rcx);
+
+        RestoreHostRegisters();
+    }
+    else if (instr.access_size == IRInstruction::U64)
+    {
+        auto src = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)instr.args[2].GetReg()));
+        auto dst = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)instr.args[0].GetReg()));
+        auto imm = instr.args[1].GetImm();
+
+        SaveHostRegisters();
+
+        MOV(generator->rdi, src);
+        ADD(generator->rdi, imm);
+        MOV(generator->rsi, dst);
+        MOV(generator->rcx, reinterpret_cast<uint64_t>(Bus::Write64));
+        generator->call(generator->rcx);
+
+        RestoreHostRegisters();
+    }
+    else
+    {
+        printf("Unknown store access size %d\n", (int)instr.access_size);
+        assert(0);
+    }
+}
+
+void JitAnd(IRInstruction& i)
+{
+    if (i.args[2].IsImm())
+    {
+        if (i.args[1].GetReg() == i.args[0].GetReg())
+        {
+            auto src = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+            generator->and_(src, i.args[2].GetImm());
+            return;    
+        }
+        auto src = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+        auto dst = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true));
+
+        MOV(generator->edi, src);
+        generator->and_(generator->edi, i.args[2].GetImm());
+        generator->movsxd(dst, generator->edi);
+    }
+    else
+    {
+        printf("TODO: and\n");
+        exit(1);
+    }
+}
+
+void JitShift(IRInstruction i)
+{
+	// SLL
+	if (i.args[2].IsImm() && i.is_logical && i.direction == IRInstruction::Direction::Left)
+	{
+		auto src = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+        auto dst = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true));
+
+		MOV(generator->cl, i.args[2].GetImm());
+		generator->shl(src, generator->cl);
+		generator->mov(dst, src);
+	}
+	else
+	{
+		printf("Invalid shift combo %d/%d/%d\n", i.args[2].type, i.is_logical, i.direction);
+		exit(1);
+	}
+}
+
+void JitMULT(IRInstruction i)
+{
+	GuestRegister lo_reg = i.is_mmi_divmul ? GuestRegister::LO1 : GuestRegister::LO;
+	GuestRegister hi_reg = i.is_mmi_divmul ? GuestRegister::HI1 : GuestRegister::HI;
+
+	auto src = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+	auto src2 = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[2].GetReg()));
+	auto lo = Xbyak::Reg64(reg_alloc.GetHostReg(lo_reg));
+	auto hi = Xbyak::Reg64(reg_alloc.GetHostReg(hi_reg));
+
+	reg_alloc.InvalidateRegister(HostRegisters::RDX);
+
+	if (i.is_unsigned)
+	{
+		generator->movsxd(generator->rax, src);
+		generator->mul(src2);
+		generator->movsxd(lo, generator->eax);
+		generator->movsxd(hi, generator->edx);
+
+		if (i.args[0].GetReg())
+		{
+			auto dst = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg()));
+			MOV(dst, lo);
+		}
+	}
+	else
+	{
+		printf("TODO: MULT");
+		assert(0);
+	}
 }
 
 void JitIncPC()
 {
-    generator->add(generator->r8, 4);
+    ADD(generator->r8, 4);
 }
 
 void EEJitX64::TranslateBlock(Block *block)
 {
+	printf("Translating block at 0x%08x\n", block->addr);
+    reg_alloc.Reset();
+
     block->entryPoint = (blockEntry)generator->getCurr();
+
+    IRInstruction prev;
 
     for (auto& i : block->instructions)
     {
-        if (i.instr != 0x00)
+        if (i.instr != PROLOGUE && i.instr != EPILOGUE && i.instr != BRANCH && prev.instr != JUMP)
             JitIncPC();
-
+        
         switch (i.instr)
         {
-        case 0x00:
+        case NOP:
+            generator->nop();
+            break;
+        case PROLOGUE:
             JitPrologue();
             break;
-        case 0x01:
+        case EPILOGUE:
             JitEpilogue();
             break;
-        case 0x02:
+        case MOVE:
             JitMov(i);
             break;
-        case 0x03:
+        case SLT:
             JitSlt(i);
             break;
-        case 0x04:
+        case BRANCH:
             JitBranch(i);
             break;
+        case OR:
+            JitOr(i);
+            break;
+        case JUMP:
+            JitJump(i);
+            break;
+        case ADD:
+            JitAdd(i);
+            break;
+        case STORE:
+            JitStore(i);
+            break;
+		case AND:
+			JitAnd(i);
+			break;
+		case SHIFT:
+			JitShift(i);
+			break;
+		case MULT:
+			JitMULT(i);
+			break;
         default:
             printf("[EEJIT_X64]: Cannot emit unknown IR instruction 0x%02x\n", i.instr);
             exit(1);
         }
+
+        prev = i;
     }
+}
+
+void EEJitX64::CacheBlock(Block *block)
+{
+    // TODO: Actually cache the block
+
+    if ((generator->getCurr() - generator->getCode()) >= (128*1024*1024))
+    {
+        delete[] generator;
+        generator = new Xbyak::CodeGenerator(0xffffffff, (void*)base);
+    }
+}
+
+Block *EEJitX64::GetBlockForAddr(uint32_t addr)
+{
+    return nullptr;
 }
 
 void EEJitX64::Initialize()

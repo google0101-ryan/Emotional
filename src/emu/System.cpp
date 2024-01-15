@@ -128,9 +128,9 @@ void System::Run()
 {
 	while (1)
 	{
-		// size_t cycles = Scheduler::GetNextTimestamp();
+		size_t cycles = Scheduler::GetNextTimestamp();
 
-		int true_cycles = EmotionEngine::Clock(32);
+		int true_cycles = EmotionEngine::Clock(cycles);
 		IOP_MANAGEMENT::Clock(true_cycles / 2);
 
 		Scheduler::CheckScheduler(true_cycles);

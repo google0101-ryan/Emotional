@@ -5,11 +5,19 @@
 
 enum IRInstrs
 {
+    NOP,
     PROLOGUE,
     EPILOGUE,
     MOVE, // General purpose move (COP0, r<-imm, etc)
     SLT, // Compare and set register (can be immediate or reg, signed or unsigned)
     BRANCH, // PC-Relative branch on condition = true
+    OR, // Do a logical or between a register and an immediate or two registers
+    JUMP, // Either a jump to an imm, or else a jump to a register
+	ADD, // Add two pieces of data (reg+imm, reg+reg)
+	STORE, // Store memory op
+	AND, // Bitwise AND
+	SHIFT, // Shift logical, arithmetic, left, right, etc...
+	MULT, // Multiply
 };
 
 struct IRValue
@@ -31,7 +39,7 @@ private:
 		float fp_value;
 		int cop_regnum;
 	} value;
-
+public:
 	Type type;
 public:
 	IRValue(Type type)
@@ -86,6 +94,7 @@ struct IRInstruction
 		LE = 3,
 		GT = 4,
 		LT = 5,
+        AL = 6,
 	} b_type;
 
 	// MOVN, MOVZ
@@ -127,7 +136,7 @@ typedef void (*blockEntry)(void* statePtr, uint32_t blockPC);
 
 struct Block
 {
-    uint32_t addr;
+    uint32_t addr, cycles;
     std::vector<IRInstruction> instructions;
     blockEntry entryPoint;
 };

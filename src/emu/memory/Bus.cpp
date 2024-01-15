@@ -441,6 +441,8 @@ void Bus::Write32(uint32_t addr, uint32_t data)
 
 	addr = Translate(addr);
 
+	printf("Wrote 0x%08x to 0x%08x\n", data, addr);
+
 	if (addr == 0x10c0 && data == 0 && !firstTime)
 	{
 		printf("Writing 0 to 0x10c0\n");

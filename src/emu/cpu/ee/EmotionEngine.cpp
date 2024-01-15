@@ -25,14 +25,15 @@ void Reset()
 #endif
 	memset(&state, 0, sizeof(state));
 
-	state.pc = 0xBFC00000;
-	state.next_pc = 0xBFC00004;
-	state.cop0_regs[15] = 0x2E20;
+	GetState()->pc = 0xBFC00000;
+	GetState()->next_pc = 0xBFC00004;
+	GetState()->cop0_regs[15] = 0x2E20;
 }
 
 int Clock(int cycles)
 {
 #ifdef EE_JIT
+	GetState()->cop0_regs[9] += cycles;
 	return EEJit::Clock(cycles);
 #else
 	#error TODO: EE Interpreter clock
@@ -107,17 +108,20 @@ bool IsBranch(uint32_t instr)
 void Dump()
 {
 	for (int i = 0; i < 32; i++)
-		printf("%s\t->\t0x%lx%016lx\n", Reg(i), state.regs[i].u64[1], state.regs[i].u64[0]);
-	printf("pc\t->\t0x%08x\n", state.pc);
-	printf("pc_at\t->\t0x%08x\n", state.pc_at);
-	printf("hi\t->\t0x%08lx\n", state.hi);
-	printf("lo\t->\t0x%08lx\n", state.lo);
-	printf("hi1\t->\t0x%08lx\n", state.hi1);
-	printf("lo1\t->\t0x%08lx\n", state.lo1);
-	printf("status\t->\t0x%08x\n", state.cop0_regs[12]);
-	printf("cause\t->\t0x%08x\n", state.cop0_regs[13]);
+		printf("%s\t->\t0x%lx%016lx\n", Reg(i), GetState()->regs[i].u64[1], GetState()->regs[i].u64[0]);
+	printf("pc\t->\t0x%08x\n", GetState()->pc);
+	printf("pc_at\t->\t0x%08x\n", GetState()->pc_at);
+	printf("hi\t->\t0x%08lx\n", GetState()->hi);
+	printf("lo\t->\t0x%08lx\n", GetState()->lo);
+	printf("hi1\t->\t0x%08lx\n", GetState()->hi1);
+	printf("lo1\t->\t0x%08lx\n", GetState()->lo1);
+	printf("COP0:");
 	for (int i = 0; i < 32; i++)
-		printf("f%d\t->\t%f\n", i, convert(state.fprs[i].i));
+		printf("\tr%d\t->\t0x%08x\n", i, GetState()->cop0_regs[i]);
+	for (int i = 0; i < 32; i++)
+		printf("f%d\t->\t%f\n", i, convert(GetState()->fprs[i].i));
+	
+	printf("0x%08lx\n", offsetof(EmotionEngine::ProcessorState, cop0_regs[12]));
 	
 #ifdef EE_JIT
 	EEJit::Dump();
@@ -190,7 +194,7 @@ void Exception(uint8_t code)
 
 	if (code == 0x08)
 	{
-		int syscall_number = std::abs((int)EmotionEngine::state.regs[3].u32[0]);
+		int syscall_number = std::abs((int)EmotionEngine::GetState()->regs[3].u32[0]);
 		if (syscall_number != 122)
 			printf("Syscall %d\n", syscall_number);
 		if (syscall_number == 0x02)
@@ -249,8 +253,8 @@ void Exception(uint8_t code)
 
 	COP0CAUSE cause;
 	COP0Status status;
-	status.value = state.cop0_regs[12];
-	cause.value = state.cop0_regs[13];
+	status.value = GetState()->cop0_regs[12];
+	cause.value = GetState()->cop0_regs[13];
 
 	cause.excode = code;
 
@@ -258,7 +262,7 @@ void Exception(uint8_t code)
 
 	if (!status.exl)
 	{
-		state.cop0_regs[14] = state.pc-4;
+		GetState()->cop0_regs[14] = GetState()->pc-4;
 
 		switch (code)
 		{
@@ -273,11 +277,11 @@ void Exception(uint8_t code)
 		status.exl = true;
 	}
 
-	state.pc = exception_addr[status.bev] + vector;
-	state.next_pc = state.pc + 4;
+	GetState()->pc = exception_addr[status.bev] + vector;
+	GetState()->next_pc = GetState()->pc + 4;
 
-	state.cop0_regs[12] = status.value;
-	state.cop0_regs[13] = cause.value;
+	GetState()->cop0_regs[12] = status.value;
+	GetState()->cop0_regs[13] = cause.value;
 }
 
 void SetIp1Pending()
