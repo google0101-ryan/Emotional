@@ -130,8 +130,12 @@ void System::Run()
 	{
 		size_t cycles = Scheduler::GetNextTimestamp();
 
+		printf("Running for a max of %ld cycles\n", cycles);
+
 		int true_cycles = EmotionEngine::Clock(cycles);
-		IOP_MANAGEMENT::Clock(true_cycles / 2);
+		IOP_MANAGEMENT::Clock(true_cycles / 8);
+
+		printf("Actual block took %ld cycles\n", true_cycles);
 
 		Scheduler::CheckScheduler(true_cycles);
 	}

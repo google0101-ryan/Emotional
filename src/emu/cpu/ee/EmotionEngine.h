@@ -43,21 +43,17 @@ int Clock(int cycles);
 void Dump();
 ProcessorState* GetState();
 void MarkDirty(uint32_t address, uint32_t size);
-void EmitPrequel();
 void Exception(uint8_t code);
 
 void SetIp1Pending(); // Set IP1 to pending, signalling a DMA interrupt
 void ClearIp1Pending(); // Clear a DMA interrupt
 
 void SetIp0Pending();
+void CheckForInterrupt();
 
 extern bool can_dump;
 
-void CheckCacheFull();
-bool DoesBlockExit(uint32_t addr);
-void EmitIR(uint32_t instr);
 bool IsBranch(uint32_t instr);
-uint64_t GetExistingBlockCycles(uint32_t addr);
 
 inline const char* Reg(int index)
     {

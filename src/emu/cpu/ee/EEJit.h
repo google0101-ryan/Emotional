@@ -18,6 +18,8 @@ enum IRInstrs
 	AND, // Bitwise AND
 	SHIFT, // Shift logical, arithmetic, left, right, etc...
 	MULT, // Multiply
+	DIV, // Divide
+	BREAK, // We make this translate to ud2 to prevent BREAK from being executed, as it's purely used for asserts and the like, which we should never hit
 };
 
 struct IRValue
@@ -29,7 +31,8 @@ public:
 		Reg,
 		Cop0Reg,
 		Cop1Reg,
-		Float
+		Float,
+		Special // Used for LO, HI, LO1, HI1
 	};
 private:
 	union
@@ -50,6 +53,7 @@ public:
 	bool IsCop1() {return type == Cop1Reg;}
 	bool IsReg() {return type == Reg;}
 	bool IsFloat() {return type == Float;}
+	bool IsSpecial() {return type == Special;}
 	// Can be used for guest, COP0, and COP1 registers
 	void SetReg(uint32_t reg) {value.register_num = reg;}
 	void SetImm(uint16_t imm) {value.imm = (int32_t)(int16_t)imm;}

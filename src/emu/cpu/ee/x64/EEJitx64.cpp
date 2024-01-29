@@ -10,6 +10,9 @@
 #include <cerrno>
 #include <cstring>
 #include <fstream>
+#include <unordered_map>
+
+std::unordered_map<uint32_t, Block*> blockMap;
 
 Xbyak::CodeGenerator* generator;
 uint8_t* base;
@@ -117,6 +120,20 @@ void JitMov(IRInstruction& i)
             MOV(dst, i.args[1].GetImm64());
         }
     }
+    else if (i.args[0].IsReg() && i.args[1].IsSpecial())
+    {
+        if (i.args[0].GetReg() == 0)
+        {
+            printf("WARNING: Mov imm -> $zero\n");
+            return;
+        }
+        else
+        {
+            auto dst = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)(i.args[0].GetReg()), true));
+            auto src = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)(i.args[1].GetReg())));
+			MOV(dst, src);
+        }
+    }
     else
     {
         printf("[EEJIT_X64]: Unknown src/dst combo for move\n");
@@ -129,31 +146,29 @@ void JitSlt(IRInstruction& i)
     // Args[0] = dst, Args[1] = op1, Args[2] = op2
     if (i.args[2].IsImm())
     {
-        if (i.is_unsigned)
+        auto dst = Xbyak::Reg8(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true));
+        if (i.args[1].GetReg() == 0)
         {
-            printf("TODO: SLTIU\n");
-            exit(1);
+            int32_t imm = i.args[2].GetImm();
+            MOV(generator->rdi, 0);
+            generator->cmp(generator->rdi, imm);
+			if (i.is_unsigned)
+				generator->seta(dst);
+			else
+	        	generator->setl(dst);
+            generator->movzx(Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true)), dst);
         }
         else
         {
-            auto dst = Xbyak::Reg8(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true));
-            if (i.args[1].GetReg() == 0)
-            {
-                int32_t imm = i.args[2].GetImm();
-                MOV(generator->rdi, 0);
-                generator->cmp(generator->rdi, imm);
-                generator->setl(dst);
-                generator->movzx(Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true)), dst);
-            }
-            else
-            {
-                auto src = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
-                int32_t imm = i.args[2].GetImm();
+            auto src = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+            int32_t imm = i.args[2].GetImm();
 
-                generator->cmp(src, imm);
-                generator->setl(dst);
-                generator->movzx(Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true)), dst);
-            }
+            generator->cmp(src, imm);
+			if (i.is_unsigned)
+				generator->seta(dst);
+			else
+	        	generator->setl(dst);
+            generator->movzx(Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true)), dst);
         }
     }
     else
@@ -169,7 +184,7 @@ void JitBranch(IRInstruction& i)
 
     Xbyak::Label cond_failed;
 
-    switch (i.b_type)
+	switch (i.b_type)
     {
     case IRInstruction::BranchType::EQ:
     {
@@ -181,8 +196,7 @@ void JitBranch(IRInstruction& i)
         else if (i.args[0].GetReg() == 0)
         {
             auto op2 = Xbyak::Reg64(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
-            MOV(generator->rdi, 0);
-            generator->cmp(generator->rdi, i.args[1].GetImm());
+            generator->cmp(op2, 0);
             generator->jne(cond_failed);
         }
         else
@@ -228,6 +242,11 @@ void JitBranch(IRInstruction& i)
     generator->jmp(done);
     generator->L(cond_failed);
     ADD(generator->r8, 4);
+	if (i.is_likely)
+	{
+	    ADD(generator->r8, 4);
+		JitEpilogue();
+	}
     generator->L(done);
 }
 
@@ -443,6 +462,15 @@ void JitShift(IRInstruction i)
 		generator->shl(src, generator->cl);
 		generator->mov(dst, src);
 	}
+	else if (i.args[2].IsImm() && i.is_logical && i.direction == IRInstruction::Direction::Right)
+	{
+		auto src = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+        auto dst = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[0].GetReg(), true));
+
+		MOV(generator->cl, i.args[2].GetImm());
+		generator->shr(src, generator->cl);
+		generator->mov(dst, src);
+	}
 	else
 	{
 		printf("Invalid shift combo %d/%d/%d\n", i.args[2].type, i.is_logical, i.direction);
@@ -464,6 +492,7 @@ void JitMULT(IRInstruction i)
 
 	if (i.is_unsigned)
 	{
+		generator->xor_(generator->rdx, generator->rdx);
 		generator->movsxd(generator->rax, src);
 		generator->mul(src2);
 		generator->movsxd(lo, generator->eax);
@@ -478,6 +507,33 @@ void JitMULT(IRInstruction i)
 	else
 	{
 		printf("TODO: MULT");
+		assert(0);
+	}
+}
+
+void JitDIV(IRInstruction i)
+{
+	GuestRegister lo_reg = i.is_mmi_divmul ? GuestRegister::LO1 : GuestRegister::LO;
+	GuestRegister hi_reg = i.is_mmi_divmul ? GuestRegister::HI1 : GuestRegister::HI;
+
+	auto src = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[1].GetReg()));
+	auto src2 = Xbyak::Reg32(reg_alloc.GetHostReg((GuestRegister)i.args[2].GetReg()));
+	auto lo = Xbyak::Reg64(reg_alloc.GetHostReg(lo_reg));
+	auto hi = Xbyak::Reg64(reg_alloc.GetHostReg(hi_reg));
+
+	reg_alloc.InvalidateRegister(HostRegisters::RDX);
+
+	if (i.is_unsigned)
+	{
+		generator->xor_(generator->rdx, generator->rdx);
+		MOV(generator->rax, src);
+		generator->div(src2);
+		MOV(lo, generator->rax);
+		MOV(hi, generator->rdx);
+	}
+	else
+	{
+		printf("TODO: DIV");
 		assert(0);
 	}
 }
@@ -542,8 +598,14 @@ void EEJitX64::TranslateBlock(Block *block)
 		case MULT:
 			JitMULT(i);
 			break;
+		case DIV:
+			JitDIV(i);
+			break;
+		case BREAK:
+			generator->ud2();
+			break;
         default:
-            printf("[EEJIT_X64]: Cannot emit unknown IR instruction 0x%02x\n", i.instr);
+            printf("[EEJIT_X64]: Cannot emit unknown IR instruction %d\n", i.instr);
             exit(1);
         }
 
@@ -554,17 +616,19 @@ void EEJitX64::TranslateBlock(Block *block)
 void EEJitX64::CacheBlock(Block *block)
 {
     // TODO: Actually cache the block
+	blockMap[block->addr] = block;
 
     if ((generator->getCurr() - generator->getCode()) >= (128*1024*1024))
     {
         delete[] generator;
         generator = new Xbyak::CodeGenerator(0xffffffff, (void*)base);
+		blockMap.clear();
     }
 }
 
 Block *EEJitX64::GetBlockForAddr(uint32_t addr)
 {
-    return nullptr;
+	return blockMap[addr];
 }
 
 void EEJitX64::Initialize()

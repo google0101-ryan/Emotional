@@ -52,6 +52,26 @@ void EmitSLL(Opcode op)
 	printf("sll %s,%s,%d\n", EmotionEngine::Reg(op.r_type.rd), EmotionEngine::Reg(op.r_type.rt), op.r_type.sa);
 }
 
+// 0x02
+void EmitSRL(Opcode op)
+{
+	IRValue rd(IRValue::Reg);
+	rd.SetReg(op.r_type.rd);
+	
+	IRValue rt(IRValue::Reg);
+	rt.SetReg(op.r_type.rt);
+	
+	IRValue sa(IRValue::Imm);
+	sa.SetImm32Unsigned(op.r_type.sa);
+
+	IRInstruction instr = IRInstruction::Build({rd, rt, sa}, SHIFT);
+	instr.is_logical = true;
+	instr.direction = IRInstruction::Direction::Right;
+	curBlock->instructions.push_back(instr);
+
+	printf("srl %s,%s,%d\n", EmotionEngine::Reg(op.r_type.rd), EmotionEngine::Reg(op.r_type.rt), op.r_type.sa);
+}
+
 void EmitJR(Opcode op)
 {
     IRValue reg(IRValue::Reg);
@@ -64,6 +84,7 @@ void EmitJR(Opcode op)
     printf("jr %s\n", EmotionEngine::Reg(reg.GetReg()));
 }
 
+// 0x09
 void EmitJalr(Opcode op)
 {
 	IRValue rd(IRValue::Reg);
@@ -78,11 +99,35 @@ void EmitJalr(Opcode op)
 	printf("jalr %s,%s\n", EmotionEngine::Reg(op.r_type.rd), EmotionEngine::Reg(op.r_type.rs));
 }
 
+// 0x0d
+void EmitBreak()
+{
+	auto instr = IRInstruction::Build({}, BREAK);
+	curBlock->instructions.push_back(instr);
+
+	printf("break\n");
+}
+
+void EmitMFLO(Opcode op)
+{
+	IRValue rd(IRValue::Reg);
+	rd.SetReg(op.r_type.rd);
+
+	IRValue lo(IRValue::Special);
+	lo.SetReg(LO);
+
+	IRInstruction instr = IRInstruction::Build({rd, lo}, MOVE);
+	instr.is_mmi_divmul = false;
+	curBlock->instructions.push_back(instr);
+
+	printf("mflo %s\n", EmotionEngine::Reg(op.r_type.rd));
+}
+
 // 0x18
 void EmitMULT(Opcode op)
 {
 	IRValue rd(IRValue::Reg);
-	rd.SetReg(op.r_type.rt);
+	rd.SetReg(op.r_type.rd);
 	IRValue rt(IRValue::Reg);
 	rt.SetReg(op.r_type.rt);
 	IRValue rs(IRValue::Reg);
@@ -95,6 +140,25 @@ void EmitMULT(Opcode op)
 	curBlock->instructions.push_back(instr);
 
 	printf("mult %s,%s,%s\n", EmotionEngine::Reg(op.r_type.rd), EmotionEngine::Reg(op.r_type.rs), EmotionEngine::Reg(op.r_type.rt));
+}
+
+// 0x1B
+void EmitDIVU(Opcode op)
+{
+	IRValue rd(IRValue::Reg);
+	rd.SetReg(op.r_type.rt);
+	IRValue rt(IRValue::Reg);
+	rt.SetReg(op.r_type.rt);
+	IRValue rs(IRValue::Reg);
+	rs.SetReg(op.r_type.rs);
+
+	auto instr = IRInstruction::Build({rd, rs, rt}, DIV);
+	instr.is_unsigned = true;
+	instr.size = IRInstruction::InstrSize::Size32;
+	instr.is_mmi_divmul = false;
+	curBlock->instructions.push_back(instr);
+
+	printf("divu %s,%s,%s\n", EmotionEngine::Reg(op.r_type.rd), EmotionEngine::Reg(op.r_type.rs), EmotionEngine::Reg(op.r_type.rt));
 }
 
 // 0x25
@@ -143,17 +207,29 @@ void EmitSpecial(Opcode op)
 	case 0x00:
 		EmitSLL(op);
 		break;
+	case 0x02:
+		EmitSRL(op);
+		break;
     case 0x08:
         EmitJR(op);
         break;
 	case 0x09:
 		EmitJalr(op);
 		break;
+	case 0x0d:
+		EmitBreak();
+		break;
     case 0x0f:
         printf("sync\n");
         break;
+	case 0x12:
+		EmitMFLO(op);
+		break;
 	case 0x18:
 		EmitMULT(op);
+		break;
+	case 0x1b:
+		EmitDIVU(op);
 		break;
 	case 0x25:
 		EmitOR(op);
@@ -258,6 +334,25 @@ void EmitSLTI(Opcode op)
     curBlock->instructions.push_back(instr);
 
     printf("slti %s,%s,0x%08lx\n", EmotionEngine::Reg(op.i_type.rt), EmotionEngine::Reg(op.i_type.rs), (int64_t)(int16_t)op.i_type.imm);
+}
+
+// 0x0B
+void EmitSLTIU(Opcode op)
+{
+    IRValue imm(IRValue::Imm);
+    imm.SetImm64(op.i_type.imm);
+
+    IRValue src(IRValue::Reg);
+    src.SetReg(op.i_type.rs);
+
+    IRValue dst(IRValue::Reg);
+    dst.SetReg(op.i_type.rt);
+
+    auto instr = IRInstruction::Build({dst, src, imm}, IRInstrs::SLT);
+    instr.is_unsigned = true;
+    curBlock->instructions.push_back(instr);
+
+    printf("sltiu %s,%s,0x%08lx\n", EmotionEngine::Reg(op.i_type.rt), EmotionEngine::Reg(op.i_type.rs), (int64_t)(int16_t)op.i_type.imm);
 }
 
 // 0x0C
@@ -377,6 +472,49 @@ void EmitCOP0(Opcode op)
     }
 }
 
+// 0x14
+void EmitBEQL(Opcode op)
+{
+    IRValue imm(IRValue::Imm);
+    imm.SetImm32(op.i_type.imm << 2);
+
+    IRValue rt(IRValue::Reg);
+    rt.SetReg(op.i_type.rt);
+
+    IRValue rs(IRValue::Reg);
+    rs.SetReg(op.i_type.rs);
+
+    auto instr = IRInstruction::Build({rs, rt, imm}, IRInstrs::BRANCH);
+    if (op.i_type.rt == 0 && op.i_type.rs == 0)
+        instr.b_type = IRInstruction::BranchType::AL;
+    else
+        instr.b_type = IRInstruction::BranchType::EQ;
+	instr.is_likely = true;
+    curBlock->instructions.push_back(instr);
+
+    printf("beql %s,%s,pc+%d\n", EmotionEngine::Reg(op.i_type.rs), EmotionEngine::Reg(op.i_type.rt), (int32_t)imm.GetImm());
+}
+
+// 0x15
+void EmitBNEL(Opcode op)
+{
+    IRValue imm(IRValue::Imm);
+    imm.SetImm32(op.i_type.imm << 2);
+
+    IRValue rt(IRValue::Reg);
+    rt.SetReg(op.i_type.rt);
+
+    IRValue rs(IRValue::Reg);
+    rs.SetReg(op.i_type.rs);
+
+    auto instr = IRInstruction::Build({rs, rt, imm}, IRInstrs::BRANCH);
+    instr.b_type = IRInstruction::BranchType::NE;
+	instr.is_likely = true;
+    curBlock->instructions.push_back(instr);
+
+    printf("bnel %s,%s,pc+%d\n", EmotionEngine::Reg(op.i_type.rs), EmotionEngine::Reg(op.i_type.rt), (int32_t)imm.GetImm());
+}
+
 // 0x2B
 void EmitSW(Opcode op)
 {
@@ -431,6 +569,8 @@ bool IsBranch(Opcode op)
         break;
 	case 0x03:
     case 0x05:
+	case 0x14:
+	case 0x15:
         return true;
     }
 
@@ -503,6 +643,9 @@ int EEJit::Clock(int cycles)
             case 0x0A:
                 EmitSLTI(op);
                 break;
+            case 0x0B:
+                EmitSLTIU(op);
+                break;
 			case 0x0C:
 				EmitANDI(op);
 				break;
@@ -515,6 +658,12 @@ int EEJit::Clock(int cycles)
             case 0x10:
                 EmitCOP0(op);
                 break;
+			case 0x14:
+				EmitBEQL(op);
+				break;
+			case 0x15:
+				EmitBNEL(op);
+				break;
             case 0x2B:
                 EmitSW(op);
                 break;
@@ -546,6 +695,8 @@ int EEJit::Clock(int cycles)
     }
     // Run it
     curBlock->entryPoint(EmotionEngine::GetState(), curBlock->addr);
+
+	printf("Block returned at pc = 0x%08x\n", EmotionEngine::GetState()->pc);
 
     return curBlock->cycles;
 }

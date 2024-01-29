@@ -42,8 +42,6 @@ void CheckScheduler(uint64_t cycles)
 {
 	global_cycles += cycles;
 
-	IOP_MANAGEMENT::Clock(cycles / 4);
-
 	if (!next_tp && !event_queue.empty())
 	{
 		next_tp = event_queue.front().cycles_from_now;

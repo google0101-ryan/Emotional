@@ -40,71 +40,6 @@ int Clock(int cycles)
 #endif
 }
 
-bool IsBranch(uint32_t instr)
-{
-	uint8_t opcode = (instr >> 26) & 0x3F;
-
-	switch (opcode)
-	{
-	case 0x00:
-	{
-		opcode = instr & 0x3F;
-		switch (opcode)
-		{
-		case 0x08:
-		case 0x09:
-		case 0x0C:
-			return true;
-		default:
-			return false;
-		}
-		break;
-	}
-	case 0x01:
-	case 0x02:
-	case 0x03:
-	case 0x04:
-	case 0x05:
-	case 0x06:
-	case 0x07:
-	case 0x14:
-	case 0x15:
-		return true;
-	case 0x10:
-		opcode = (instr >> 21) & 0x3F;
-		switch (opcode)
-		{
-		case 0x10:
-		{
-			opcode = instr & 0x3F;
-			switch (opcode)
-			{
-			case 0x18:
-				return true;
-			default:
-				return false;
-			}
-		}
-		default:
-			return false;
-		}
-		break;
-	case 0x11:
-		opcode = (instr >> 21) & 0x1F;
-		switch (opcode)
-		{
-		case 0x8:
-			return true;
-		}
-		break;
-	default:
-		return false;
-	}
-
-	return false;
-}
-#define BLOCKCACHE_ENABLE
-
 void Dump()
 {
 	for (int i = 0; i < 32; i++)
@@ -300,12 +235,29 @@ void ClearIp1Pending()
 	EmotionEngine::GetState()->cop0_regs[13] = cause.value;
 }
 
+void CheckForInterrupt()
+{
+
+}
+
 void SetIp0Pending()
 {
 	COP0CAUSE cause;
 	cause.value = EmotionEngine::GetState()->cop0_regs[13];
 	cause.ip0_pending = true;
 	EmotionEngine::GetState()->cop0_regs[13] = cause.value;
+	// We try and do an exception here
+	COP0Status status;
+	status.value = EmotionEngine::GetState()->cop0_regs[12];
+	bool int_enabled = status.eie && status.ie && !status.erl && !status.exl;
+
+	bool pending = (cause.ip0_pending && status.im0)
+					|| (cause.ip1_pending && status.im1);
+	
+	if (int_enabled && pending)
+	{
+		Exception(0x00);
+	}
 }
 
 }  // namespace EmotionEngine

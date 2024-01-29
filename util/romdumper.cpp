@@ -66,7 +66,7 @@ int main(int argc, char** argv)
 
     for (int i = 0; i < entryCount; i++)
     {
-        printf("0x%08x\n", pos);
+        printf("%s\t->\t0x%08x, 0x%08x\n", entries[i].name, pos, entries[i].file_size);
         if (!strncmp(entries[i].name, argv[2], 10))
         {
             printf("Found \"%s\" at 0x%08x\n", entries[i].name, pos);
