@@ -16,3 +16,5 @@ static void ExportStub()
 {
 	// Do nothing export stub for placeholder slots
 }
+
+int* QueryBootMode(int mode);

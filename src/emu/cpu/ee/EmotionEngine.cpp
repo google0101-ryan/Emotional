@@ -235,11 +235,6 @@ void ClearIp1Pending()
 	EmotionEngine::GetState()->cop0_regs[13] = cause.value;
 }
 
-void CheckForInterrupt()
-{
-
-}
-
 void SetIp0Pending()
 {
 	COP0CAUSE cause;
